@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+
+"""
+יצירת קבצי ACCESS מהנתונים של הביטוח
+"""
+
 import os
 import csv
 from datetime import datetime
@@ -167,161 +172,168 @@ def create_sqlite_file(save_path, month_year, effective_date, insurance_data, md
             access_app = win32com.client.Dispatch("Access.Application")
             access_app.NewCurrentDatabase(mdb_path, 9)  # 9 = Access 2000
             print("✅ יצר Access 2000 database")
-        
-        # טבלה 1: tblBituachHova_edit
-        print("🔧 יוצר טבלה 1: tblBituachHova_edit")
-        create_table1_sql = """
-        CREATE TABLE tblBituachHova_edit (
-            EffectiveDate TEXT(10),
-            Nigrar LONG,
-            Handasi LONG,
-            Agricalture LONG
-        )
-        """
-        access_app.DoCmd.RunSQL(create_table1_sql)
-        
-        # קבלת נתונים אמיתיים לטבלה הראשונה - רק נתונים אמיתיים!
-        nigrar_value = None
-        handasi_value = None
-        agricalture_value = None
-        
-        if insurance_data and 'special_vehicle' in insurance_data:
-            special_data = insurance_data['special_vehicle']
-            if 'Nigrar' in special_data and special_data['Nigrar']:
-                nigrar_value = int(special_data['Nigrar'])  # המרה למספר שלם
-            if 'Handasi' in special_data and special_data['Handasi']:
-                handasi_value = int(special_data['Handasi'])  # המרה למספר שלם
-            if 'Agricalture' in special_data and special_data['Agricalture']:
-                agricalture_value = int(special_data['Agricalture'])  # המרה למספר שלם
-        
-        # הכנסת נתונים לטבלה 1 - רק אם יש נתונים אמיתיים
-        if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
-            insert1_sql = f"""
-            INSERT INTO tblBituachHova_edit (EffectiveDate, Nigrar, Handasi, Agricalture)
-            VALUES ('{effective_date}', {nigrar_value}, {handasi_value}, {agricalture_value})
-            """
-            access_app.DoCmd.RunSQL(insert1_sql)
-            print("✅ הכניס נתונים לטבלה 1")
-        else:
-            print("⚠️ אין נתונים אמיתיים לרכב מיוחד - רק יוצר טבלה ריקה")
-        print("✅ טבלה 1 נוצרה עם נתונים")
-        
-        # טבלה 2: tblBituachHovaMishari_edit (רכב מסחרי)
-        print("🔧 יוצר טבלה 2: tblBituachHovaMishari_edit")
-        create_table2_sql = """
-        CREATE TABLE tblBituachHovaMishari_edit (
-            EffectiveDate TEXT(10),
-            Age LONG,
-            Ad1 DOUBLE,
-            Ad2 DOUBLE
-        )
-        """
-        access_app.DoCmd.RunSQL(create_table2_sql)
-        
-        commercial_ages = [17, 21, 24, 40, 50]
-        commercial_age_groups = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
-        
-        for i, age in enumerate(commercial_ages):
-            age_group = commercial_age_groups[i]
-            ad1_value = None
-            ad2_value = None
             
-            if insurance_data and 'commercial_car' in insurance_data and age_group in insurance_data['commercial_car']:
-                age_data = insurance_data['commercial_car'][age_group]
-                ad1_value = age_data.get('עד 4000 (כולל)')
-                ad2_value = age_data.get('מעל 4000')
-                if ad1_value is not None and ad2_value is not None:
-                    # המרה למספרים שלמים
-                    ad1_value = int(ad1_value)
-                    ad2_value = int(ad2_value)
-                    print(f"📊 נתונים אמיתיים לרכב מסחרי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}")
-                else:
-                    print(f"⚠️ נתונים חסרים לרכב מסחרי גיל {age_group} - מדלג")
-                    continue
+            # טבלה 1: tblBituachHova_edit
+            print("🔧 יוצר טבלה 1: tblBituachHova_edit")
+            create_table1_sql = """
+            CREATE TABLE tblBituachHova_edit (
+                EffectiveDate TEXT(10),
+                Nigrar LONG,
+                Handasi LONG,
+                Agricalture LONG
+            )
+            """
+            access_app.DoCmd.RunSQL(create_table1_sql)
+        
+            # קבלת נתונים אמיתיים לטבלה הראשונה - רק נתונים אמיתיים!
+            nigrar_value = None
+            handasi_value = None
+            agricalture_value = None
+            
+            if insurance_data and 'special_vehicle' in insurance_data:
+                special_data = insurance_data['special_vehicle']
+                if 'Nigrar' in special_data and special_data['Nigrar']:
+                    nigrar_value = int(special_data['Nigrar'])  # המרה למספר שלם
+                if 'Handasi' in special_data and special_data['Handasi']:
+                    handasi_value = int(special_data['Handasi'])  # המרה למספר שלם
+                if 'Agricalture' in special_data and special_data['Agricalture']:
+                    agricalture_value = int(special_data['Agricalture'])  # המרה למספר שלם
+            
+            # הכנסת נתונים לטבלה 1 - רק אם יש נתונים אמיתיים
+            if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
+                insert1_sql = f"""
+                INSERT INTO tblBituachHova_edit (EffectiveDate, Nigrar, Handasi, Agricalture)
+                VALUES ('{effective_date}', {nigrar_value}, {handasi_value}, {agricalture_value})
+                """
+                access_app.DoCmd.RunSQL(insert1_sql)
+                print("✅ הכניס נתונים לטבלה 1")
             else:
-                print(f"⚠️ אין נתונים אמיתיים לרכב מסחרי גיל {age_group} - מדלג")
-                continue
-            
-            insert2_sql = f"""
-            INSERT INTO tblBituachHovaMishari_edit (EffectiveDate, Age, Ad1, Ad2)
-            VALUES ('{effective_date}', {age}, {ad1_value}, {ad2_value})
+                print("⚠️ אין נתונים אמיתיים לרכב מיוחד - רק יוצר טבלה ריקה")
+            print("✅ טבלה 1 נוצרה עם נתונים")
+        
+            # טבלה 2: tblBituachHovaMishari_edit (רכב מסחרי)
+            print("🔧 יוצר טבלה 2: tblBituachHovaMishari_edit")
+            create_table2_sql = """
+            CREATE TABLE tblBituachHovaMishari_edit (
+                EffectiveDate TEXT(10),
+                Age LONG,
+                Ad1 DOUBLE,
+                Ad2 DOUBLE
+            )
             """
-            access_app.DoCmd.RunSQL(insert2_sql)
-        print("✅ טבלה 2 נוצרה עם 5 שורות")
+            access_app.DoCmd.RunSQL(create_table2_sql)
         
-        # טבלה 3: tblBituachHovaPrati_edit (רכב פרטי)
-        print("🔧 יוצר טבלה 3: tblBituachHovaPrati_edit")
-        create_table3_sql = """
-        CREATE TABLE tblBituachHovaPrati_edit (
-            EffectiveDate TEXT(10),
-            Age LONG,
-            Ad1 DOUBLE,
-            Ad2 DOUBLE,
-            Ad3 DOUBLE,
-            Ad4 DOUBLE
-        )
-        """
-        access_app.DoCmd.RunSQL(create_table3_sql)
-        
-        private_ages = [17, 21, 24, 30, 40, 50]
-        private_age_groups = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
-        
-        for i, age in enumerate(private_ages):
-            age_group = private_age_groups[i]
-            ad1_value = None
-            ad2_value = None
-            ad3_value = None
-            ad4_value = None
+            commercial_ages = [17, 21, 24, 40, 50]
+            commercial_age_groups = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
             
-            if insurance_data and 'private_car' in insurance_data and age_group in insurance_data['private_car']:
-                age_data = insurance_data['private_car'][age_group]
-                ad1_value = age_data.get('עד 1050')
-                ad2_value = age_data.get('מ-1051 עד 1550')
-                ad3_value = age_data.get('מ-1551 עד 2050')
-                ad4_value = age_data.get('מ-2051 ומעלה')
-                if ad1_value is not None and ad2_value is not None and ad3_value is not None and ad4_value is not None:
-                    # המרה למספרים שלמים
-                    ad1_value = int(ad1_value)
-                    ad2_value = int(ad2_value)
-                    ad3_value = int(ad3_value)
-                    ad4_value = int(ad4_value)
-                    print(f"📊 נתונים אמיתיים לרכב פרטי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}, Ad3={ad3_value}, Ad4={ad4_value}")
+            for i, age in enumerate(commercial_ages):
+                age_group = commercial_age_groups[i]
+                ad1_value = None
+                ad2_value = None
+                
+                if insurance_data and 'commercial_car' in insurance_data and age_group in insurance_data['commercial_car']:
+                    age_data = insurance_data['commercial_car'][age_group]
+                    ad1_value = age_data.get('עד 4000 (כולל)')
+                    ad2_value = age_data.get('מעל 4000')
+                    if ad1_value is not None and ad2_value is not None:
+                        # המרה למספרים שלמים
+                        ad1_value = int(ad1_value)
+                        ad2_value = int(ad2_value)
+                        print(f"📊 נתונים אמיתיים לרכב מסחרי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}")
+                    else:
+                        print(f"⚠️ נתונים חסרים לרכב מסחרי גיל {age_group} - מדלג")
+                        continue
                 else:
-                    print(f"⚠️ נתונים חסרים לרכב פרטי גיל {age_group} - מדלג")
+                    print(f"⚠️ אין נתונים אמיתיים לרכב מסחרי גיל {age_group} - מדלג")
                     continue
-            else:
-                print(f"⚠️ אין נתונים אמיתיים לרכב פרטי גיל {age_group} - מדלג")
-                continue
-            
-            insert3_sql = f"""
-            INSERT INTO tblBituachHovaPrati_edit (EffectiveDate, Age, Ad1, Ad2, Ad3, Ad4)
-            VALUES ('{effective_date}', {age}, {ad1_value}, {ad2_value}, {ad3_value}, {ad4_value})
-            """
-            access_app.DoCmd.RunSQL(insert3_sql)
-        print("✅ טבלה 3 נוצרה עם 6 שורות")
+                
+                insert2_sql = f"""
+                INSERT INTO tblBituachHovaMishari_edit (EffectiveDate, Age, Ad1, Ad2)
+                VALUES ('{effective_date}', {age}, {ad1_value}, {ad2_value})
+                """
+                access_app.DoCmd.RunSQL(insert2_sql)
+            print("✅ טבלה 2 נוצרה עם 5 שורות")
         
-        # שמירה וסגירה
-        print("💾 Access מוכן - לא צריך Save()")
-        try:
-            access_app.CloseCurrentDatabase()
-            access_app.Quit()
-            print("✅ Access נסגר")
-        except Exception as e:
-            print(f"⚠️ שגיאה בסגירת Access: {str(e)}")
-            # מנסה לסגור בכוח
+            # טבלה 3: tblBituachHovaPrati_edit (רכב פרטי)
+            print("🔧 יוצר טבלה 3: tblBituachHovaPrati_edit")
+            create_table3_sql = """
+            CREATE TABLE tblBituachHovaPrati_edit (
+                EffectiveDate TEXT(10),
+                Age LONG,
+                Ad1 DOUBLE,
+                Ad2 DOUBLE,
+                Ad3 DOUBLE,
+                Ad4 DOUBLE
+            )
+            """
+            access_app.DoCmd.RunSQL(create_table3_sql)
+            
+            private_ages = [17, 21, 24, 30, 40, 50]
+            private_age_groups = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
+            
+            for i, age in enumerate(private_ages):
+                age_group = private_age_groups[i]
+                ad1_value = None
+                ad2_value = None
+                ad3_value = None
+                ad4_value = None
+                
+                if insurance_data and 'private_car' in insurance_data and age_group in insurance_data['private_car']:
+                    age_data = insurance_data['private_car'][age_group]
+                    ad1_value = age_data.get('עד 1050')
+                    ad2_value = age_data.get('מ-1051 עד 1550')
+                    ad3_value = age_data.get('מ-1551 עד 2050')
+                    ad4_value = age_data.get('מ-2051 ומעלה')
+                    if ad1_value is not None and ad2_value is not None and ad3_value is not None and ad4_value is not None:
+                        # המרה למספרים שלמים
+                        ad1_value = int(ad1_value)
+                        ad2_value = int(ad2_value)
+                        ad3_value = int(ad3_value)
+                        ad4_value = int(ad4_value)
+                        print(f"📊 נתונים אמיתיים לרכב פרטי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}, Ad3={ad3_value}, Ad4={ad4_value}")
+                    else:
+                        print(f"⚠️ נתונים חסרים לרכב פרטי גיל {age_group} - מדלג")
+                        continue
+                else:
+                    print(f"⚠️ אין נתונים אמיתיים לרכב פרטי גיל {age_group} - מדלג")
+                    continue
+                
+                insert3_sql = f"""
+                INSERT INTO tblBituachHovaPrati_edit (EffectiveDate, Age, Ad1, Ad2, Ad3, Ad4)
+                VALUES ('{effective_date}', {age}, {ad1_value}, {ad2_value}, {ad3_value}, {ad4_value})
+                """
+                access_app.DoCmd.RunSQL(insert3_sql)
+            print("✅ טבלה 3 נוצרה עם 6 שורות")
+            
+            # שמירה וסגירה
+            print("💾 Access מוכן - לא צריך Save()")
             try:
+                access_app.CloseCurrentDatabase()
                 access_app.Quit()
-            except:
-                pass
-        
-        print(f"📊 קובץ Access 2000 נוצר בהצלחה: {mdb_path}")
-        print(f"📂 הקובץ מכיל 3 טבלאות:")
-        print(f"   • tblBituachHova_edit (1 שורה)")
-        print(f"   • tblBituachHovaMishari_edit (5 שורות)")
-        print(f"   • tblBituachHovaPrati_edit (6 שורות)")
-        
-        return mdb_path
-        
+                print("✅ Access נסגר")
+            except Exception as e:
+                print(f"⚠️ שגיאה בסגירת Access: {str(e)}")
+                # מנסה לסגור בכוח
+                try:
+                    access_app.Quit()
+                except:
+                    pass
+            
+            print(f"📊 קובץ Access 2000 נוצר בהצלחה: {mdb_path}")
+            print(f"📂 הקובץ מכיל 3 טבלאות:")
+            print(f"   • tblBituachHova_edit (1 שורה)")
+            print(f"   • tblBituachHovaMishari_edit (5 שורות)")
+            print(f"   • tblBituachHovaPrati_edit (6 שורות)")
+            
+            return mdb_path
+            
+        except Exception as e:
+            print(f"❌ שגיאה ביצירת Access: {str(e)}")
+            import traceback
+            print(f"📋 פרטי השגיאה:")
+            traceback.print_exc()
+            return None
+            
     except Exception as e:
         print(f"❌ שגיאה ביצירת Access: {str(e)}")
         import traceback

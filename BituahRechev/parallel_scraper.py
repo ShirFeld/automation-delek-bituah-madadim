@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+הגדרת תרחישי השליפה לרכב פרטי, מסחרי ומיוחד
+"""
+
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed

@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+מתחבר לאתר פז, 
+שולף מחירי דלק (95, 98, נפט, סולר), 
+יוצר קובץ KNE בגרסת Access 2000
+"""
+
 
 import requests
 from bs4 import BeautifulSoup

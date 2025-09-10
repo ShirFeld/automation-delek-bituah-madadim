@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+הקלאס הראשי לשליפת נתוני ביטוח חובה
+שולף נתונים עבור: רכב פרטי,מסחרי ומיוחד
+יוצר תמונה עם טבלאות ונתונים ויוצר MDB
+"""
+
 import os
 import time
 from datetime import datetime, timedelta
@@ -44,9 +50,9 @@ class InsuranceScraper:
 
     # navigation helpers
     def _goto(self):
-        url = "https://car.cma.gov.il/Parameters/Get?next_page=2&curr_page=1&playAnimation=true&fontSize=12"
-        self.driver.get(url)
-        time.sleep(2)
+            url = "https://car.cma.gov.il/Parameters/Get?next_page=2&curr_page=1&playAnimation=true&fontSize=12"
+            self.driver.get(url)
+            time.sleep(2)
 
     def _press_compare(self):
         self.driver.find_element(By.ID, 'press_to_compare').click()
@@ -78,8 +84,8 @@ class InsuranceScraper:
                     print(f"⚠️ שגיאה בעיבוד שורת הראל: {e}")
                     continue
             
-        print("❌ לא נמצא מחיר הראל")
-        return None
+            print("❌ לא נמצא מחיר הראל")
+            return None
                 
     def _fill_common(self, age, lic):
         a = self.driver.find_element(By.ID,'D2'); a.clear(); a.send_keys(str(age))
@@ -111,7 +117,7 @@ class InsuranceScraper:
                 res.setdefault(self._private_age_group(age), {})[self._private_col(vol)] = price
                 self._goto(); Select(self.driver.find_element(By.ID,'ddlSheets')).select_by_value('1'); time.sleep(1)
             except Exception:
-                continue
+                        continue
         return res
 
     def _private_val(self, vol):
@@ -210,7 +216,7 @@ class InsuranceScraper:
             has_data = any(len(data['rows']) > 0 for data in tables.values())
             if not has_data:
                 print("⚠️ אין נתונים ליצירת תמונה")
-                return None
+            return None
             
             fig, axes = plt.subplots(1, 3, figsize=(20, 8))
             for ax, name in zip(axes, ['tblBituachHovaPrati_edit','tblBituachHovaMishari_edit','tblBituachHova_edit']):
