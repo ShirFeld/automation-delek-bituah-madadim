@@ -80,7 +80,7 @@ class InsuranceScraper:
                             price = float(txt)
                             print(f"💰 מצא מחיר הראל: {price} ₪")
                             return price
-                except Exception as e:
+            except Exception as e:
                     print(f"⚠️ שגיאה בעיבוד שורת הראל: {e}")
                     continue
             
@@ -88,9 +88,27 @@ class InsuranceScraper:
             return None
                 
     def _fill_common(self, age, lic):
-        a = self.driver.find_element(By.ID,'D2'); a.clear(); a.send_keys(str(age))
-        e = self.driver.find_element(By.ID,'E'); e.clear(); e.send_keys(str(lic))
-        self.driver.find_element(By.XPATH, "//input[@type='radio' and @value='1']").click()
+        try:
+            # מילוי גיל - שימוש בכמה שיטות
+            age_field = self.driver.find_element(By.ID,'D2')
+            age_field.clear()
+            age_field.click()
+            age_field.send_keys(str(age))
+            
+            # מילוי רישיון - שימוש בכמה שיטות  
+            lic_field = self.driver.find_element(By.ID,'E')
+            lic_field.clear()
+            lic_field.click()
+            lic_field.send_keys(str(lic))
+            
+            # לחיצה על כפתור רדיו
+            radio_button = self.driver.find_element(By.XPATH, "//input[@type='radio' and @value='1']")
+            self.driver.execute_script("arguments[0].click();", radio_button)
+            
+            time.sleep(1)  # המתנה קצרה לאחר מילוי
+            print(f"✅ מילא שדות: גיל={age}, רישיון={lic}")
+            except Exception as e:
+            print(f"⚠️ שגיאה במילוי שדות: {e}")
 
     # private cars
     def _scrape_private(self):
@@ -111,7 +129,11 @@ class InsuranceScraper:
                 if vol_el.tag_name == 'select':
                     Select(vol_el).select_by_value(self._private_val(vol))
                 else:
-                    vol_el.clear(); vol_el.send_keys(str(vol))
+                    vol_el.clear()
+                    vol_el.click()
+                    vol_el.send_keys(str(vol))
+                
+                time.sleep(1)  # המתנה אחרי מילוי נפח
                 self._press_compare()
                 price = self._extract_harel_price()
                 res.setdefault(self._private_age_group(age), {})[self._private_col(vol)] = price
@@ -197,11 +219,22 @@ class InsuranceScraper:
         return res
 
     # outputs
-    def save_tables_as_image(self, insurance_data=None, save_path=r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev"):
+    def save_tables_as_image(self, insurance_data=None, save_path=None):
         try:
             from simple_mdb_creator import prepare_all_tables_data
             import matplotlib.pyplot as plt
-            os.makedirs(save_path, exist_ok=True)
+            
+            # אם לא סופק נתיב, נשתמש בנתיב הנכון
+            if save_path is None:
+                save_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev"
+            
+            # יצירת התיקיות אם לא קיימות
+            try:
+                os.makedirs(save_path, exist_ok=True)
+                print(f"✅ תיקייה מוכנה: {save_path}")
+            except Exception as e:
+                print(f"❌ שגיאה ביצירת תיקייה: {e}")
+            return None
             next_month = (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1)
             image_path = os.path.join(save_path, f"{next_month.strftime('%m%y')}.jpg")
             
@@ -215,8 +248,7 @@ class InsuranceScraper:
             # בדיקה שיש נתונים לפחות בטבלה אחת
             has_data = any(len(data['rows']) > 0 for data in tables.values())
             if not has_data:
-                print("⚠️ אין נתונים ליצירת תמונה")
-            return None
+                print("⚠️ אין נתונים ליצירת תמונה - יוצר תמונה עם הודעת 'אין נתונים'")
             
             fig, axes = plt.subplots(1, 3, figsize=(20, 8))
             for ax, name in zip(axes, ['tblBituachHovaPrati_edit','tblBituachHovaMishari_edit','tblBituachHova_edit']):
@@ -224,7 +256,7 @@ class InsuranceScraper:
                 if len(data['rows']) > 0:
                     table = ax.table(cellText=data['rows'], colLabels=data['headers'], cellLoc='center', loc='center')
                     table.auto_set_font_size(False); table.set_fontsize(9); table.scale(1, 2)
-                else:
+                    else:
                     # אם אין נתונים, נציג הודעה
                     ax.text(0.5, 0.5, 'אין נתונים', ha='center', va='center', fontsize=14)
                 ax.set_xlim(ax.get_xlim()[::-1]); ax.axis('off')
@@ -235,9 +267,14 @@ class InsuranceScraper:
             print(f"❌ שגיאה ביצירת תמונה: {e}")
             return None
 
-    def create_mdb_database(self, insurance_data=None, save_path=r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev"):
+    def create_mdb_database(self, insurance_data=None, save_path=None):
         try:
             from simple_mdb_creator import create_insurance_files
+            
+            # אם לא סופק נתיב, נשתמש בנתיב הנכון
+            if save_path is None:
+                save_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev"
+            
             return create_insurance_files(save_path, insurance_data)
         except Exception as e:
             print(f"❌ שגיאה ביצירת MDB: {e}")

@@ -22,16 +22,24 @@ try:
 except ImportError:
     HAS_WIN32COM = False
 
-def create_insurance_files(save_path=r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev", insurance_data=None, mdb_filename=None):
+def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=None):
     """יצירת קבצי נתונים לביטוח"""
     try:
+        # אם לא סופק נתיב, נשתמש בנתיב הנכון
+        if save_path is None:
+            save_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev"
+        
         print(f"🔍 מתחיל יצירת קבצי נתונים...")
         print(f"📂 נתיב: {save_path}")
         print(f"📊 נתונים: {insurance_data is not None}")
         
         # יצירת תיקייה אם לא קיימת
-        os.makedirs(save_path, exist_ok=True)
-        print(f"✅ תיקייה מוכנה: {save_path}")
+        try:
+            os.makedirs(save_path, exist_ok=True)
+            print(f"✅ תיקייה מוכנה: {save_path}")
+        except Exception as e:
+            print(f"❌ שגיאה ביצירת תיקייה: {e}")
+            return None
         
         # יצירת שם הקובץ - פורמט kneMMYY או שם מותאם (מבוסס על חודש התחולה הבא)
         if mdb_filename:
