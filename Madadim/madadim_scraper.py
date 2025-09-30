@@ -312,22 +312,19 @@ class MadadimScraper:
                 print(f"❌ שגיאה בהכנסת קוד: {e}")
                 return None
             
-            # שלב 3: גלילה למטה ולחיצה על המשך
-            print("גולל למטה ולוחץ המשך...")
+            # שלב 3: לחיצה על כפתור המשך
+            print("מנסה ללחוץ על המשך...")
             try:
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(2)
-                
-                continue_btn = self.driver.find_element(By.LINK_TEXT, "המשך")
-                actions = ActionChains(self.driver)
-                actions.move_to_element(continue_btn).perform()
-                time.sleep(1)
+                continue_btn = self.wait.until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'a.greenBigBtn[data-ng-click="mainCtrl.searchByCode();"]'))
+                )
                 continue_btn.click()
                 print("✓ נלחץ על המשך")
                 time.sleep(3)
             except Exception as e:
                 print(f"❌ שגיאה בלחיצת המשך: {e}")
                 return None
+
             
             # שלב 4: בחירת הנושא השני ב-variableBox - גנרי
             print("בוחר את הנושא השני...")
@@ -349,14 +346,7 @@ class MadadimScraper:
                 topic_text = second_topic.text
                 print(f"בוחר את הנושא השני: {topic_text}")
                 
-                # גלילה לאלמנט
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", second_topic)
-                time.sleep(1)
-                
-                # לחיצה עם ActionChains
-                actions = ActionChains(self.driver)
-                actions.move_to_element(second_topic).perform()
-                time.sleep(0.5)
+        
                 
                 try:
                     second_topic.click()
