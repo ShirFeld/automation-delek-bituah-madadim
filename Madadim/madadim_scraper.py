@@ -25,6 +25,15 @@ class MadadimScraper:
             "תשומה באוטובוסים": "440010",
             "תשומה בבניה למסחר ולמשרדים": "800010"
         }
+
+        self.cbs_scenarios = [
+            "מדד המחירים לצרכן - כללי",
+            "מדד המחירים לצרכן, לפי קבוצות צריכה ראשיות",
+            "סנריו 3",
+            "סנריו 4",
+            # ... עד 11
+        ]
+        self.current_scenario_index = 0 
         
         # אתרי המקור
         self.cbs_url = "https://www.cbs.gov.il/he/Statistics/Pages/%D7%9E%D7%97%D7%95%D7%9C%D7%9C%D7%99%D7%9D/%D7%9E%D7%97%D7%95%D7%9C%D7%9C-%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D.aspx"
@@ -228,7 +237,7 @@ class MadadimScraper:
             self.driver.switch_to.frame(0)
             time.sleep(3)  # המתנה ארוכה יותר
             
-            # שלב 1: בחירת רדיו באטון - עם הגנות
+            # שלב 1: סימון הכפתור לחיפוש לפי קוד
             print("בוחר רדיו באטון...")
             try:
                 # נסיון עם ActionChains כמו בקוד המקורי
@@ -326,7 +335,7 @@ class MadadimScraper:
                 return None
 
             
-            # שלב 4: בחירת הנושא השני ב-variableBox - גנרי
+            # שלב 4: בחירת הנושא-variableBox - גנרי
             print("בוחר את הנושא השני...")
             try:
                 # מחפש את כל הנושאים ב-variableBox
@@ -346,8 +355,6 @@ class MadadimScraper:
                 topic_text = second_topic.text
                 print(f"בוחר את הנושא השני: {topic_text}")
                 
-        
-                
                 try:
                     second_topic.click()
                     print("✓ נבחר הנושא השני בלחיצה רגילה")
@@ -362,7 +369,7 @@ class MadadimScraper:
                 return None
 
             
-            # לחיצה על כפתור המשך הבא
+            # לחיצה על כפתור המשך לבחירת הנושאים
             next_arrow = self.wait.until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'img[src*="nextArrow"]'))
             )
@@ -371,79 +378,50 @@ class MadadimScraper:
             
             # שלב 5: בחירת תת נושא ראשון - גנרי
             print("בוחר תת נושא ראשון...")
+            
             try:
-                # מחפש את כל התת נושאים
+            # מחפש את כל התת נושאים
                 subtopics = self.wait.until(
-                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBox ul li a'))
+                    EC.presence_of_all_elements_located(
+                        (By.CSS_SELECTOR, 'div.jspPane ul.scroll-pane-inner li a.ellipsis.ng-binding')
+                    )
                 )
                 print(f"נמצאו {len(subtopics)} תת נושאים")
-                
+
                 if len(subtopics) == 0:
-                    print("❌ לא נמצאו תת נושאים")
-                    return None
-                
-                # בחירת התת נושא הראשון
-                first_subtopic = subtopics[0]
-                subtopic_text = first_subtopic.text
-                print(f"בוחר תת נושא ראשון: {subtopic_text}")
-                
-                # גלילה ולחיצה
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", first_subtopic)
-                time.sleep(1)
-                
-                try:
-                    first_subtopic.click()
-                    print("✓ נבחר תת נושא ראשון")
-                except:
-                    self.driver.execute_script("arguments[0].click();", first_subtopic)
-                    print("✓ נבחר תת נושא ראשון עם JavaScript")
-                
-                time.sleep(3)
+                    print(" לא נמצאו תת נושאים")
+                else:
+                    for topic_text in self.cbs_scenarios:
+                        target = next((t for t in subtopics if topic_text in t.text), None)
+                        if target:
+                            print(f"בוחר תת נושא: {topic_text}")
+                            target.click()
+                            time.sleep(1)
+                        else:
+                            print(f" לא נמצא תת נושא עם טקסט: {topic_text}")
+
             except Exception as e:
-                print(f"❌ שגיאה בבחירת תת נושא: {e}")
-                return None
+                print(f" שגיאה בבחירת תת נושא: {e}")
+
             
             # שלב 6: בחירת הסדרה הראשונה (צ'ק בוקס) - גנרי
-            print("בוחר צ'ק בוקס ראשון...")
             try:
-                # מחפש את כל הצ'ק בוקסים
-                checkbox_selectors = [
-                    'label[for^="series_"]',
-                    '.checkbox > label',
-                    'input[type="checkbox"]',
-                    '.checkbox input'
-                ]
+                # מחפש את כל ה-labels שמייצגים checkboxes
+                labels = self.driver.find_elements(By.CSS_SELECTOR, 'label[for^="series_"]')
                 
-                checkbox_element = None
-                for selector in checkbox_selectors:
-                    try:
-                        checkboxes = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                        if checkboxes:
-                            checkbox_element = checkboxes[0]  # הראשון ברשימה
-                            print(f"✓ נמצא צ'ק בוקס עם: {selector}")
-                            break
-                    except:
-                        continue
-                
-                if not checkbox_element:
+                if not labels:
                     print("❌ לא נמצא צ'ק בוקס")
-                    return None
-                
-                # גלילה ולחיצה על הצ'ק בוקס
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", checkbox_element)
-                time.sleep(1)
-                
-                try:
-                    checkbox_element.click()
-                    print("✓ צ'ק בוקס נבחר")
-                except:
-                    self.driver.execute_script("arguments[0].click();", checkbox_element)
-                    print("✓ צ'ק בוקס נבחר עם JavaScript")
-                
-                time.sleep(2)
+                else:
+                    first_label = labels[0]
+                    # סימון הצ'קבוקס דרך JavaScript
+                    checkbox_id = first_label.get_attribute('for')
+                    script = f"document.getElementById('{checkbox_id}').click();"
+                    self.driver.execute_script(script)
+                    print(f"✓ צ'ק בוקס {checkbox_id} סומן בהצלחה")
+
             except Exception as e:
-                print(f"❌ שגיאה בבחירת צ'ק בוקס: {e}")
-                return None
+                print(f"❌ שגיאה בסימון צ'ק בוקס: {e}")
+
             
             # לחיצה על המשך לבחירת תקופת זמן
             continue_time = self.wait.until(
