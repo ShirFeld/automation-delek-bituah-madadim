@@ -219,12 +219,19 @@ class MadadimScraper:
             self.driver.quit()
     
     def get_previous_month_number(self):
+        month = 0
         """קבלת מספר החודש הקודם"""
         today = datetime.date.today()
         if today.month == 1:
-            return 12
+            month = 12
         else:
-            return today.month - 1
+            month =  today.month - 1
+
+        if today.day < 15:
+            month = month - 1
+        
+        return month    
+        
     
     def scrape_cbs_indicator(self, indicator_name, indicator_code):
         """שליפת מדד בודד מאתר הלמ"ס"""
@@ -430,13 +437,22 @@ class MadadimScraper:
             continue_time.click()
             time.sleep(2)
             
-            # שלב 9: בחירת השנה הנוכחית
+            # שלב 7: בחירת השנה הנוכחית
             print("בוחר שנה...")
             try:
                 current_year = datetime.date.today().year
+                print("curreny year: ", current_year)
+                
+                # מציאת האלמנט של השנה
                 year_link = self.wait.until(
-                    EC.element_to_be_clickable((By.LINK_TEXT, str(current_year)))
+                    EC.presence_of_element_located((By.CSS_SELECTOR, f"div.variableBoxInner.scroll-pane.jspScrollable div.jspPane ul li a[title='{current_year}']"))
                 )
+                
+                # גלילה לאלמנט כדי שיהיה גלוי
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", year_link)
+                time.sleep(0.5)
+                
+                # לחיצה על השנה
                 year_link.click()
                 print(f"✓ נבחרה שנה {current_year}")
                 time.sleep(2)
@@ -444,42 +460,96 @@ class MadadimScraper:
                 print(f"❌ שגיאה בבחירת שנה: {e}")
                 return None
             
-            # שלב 6: בחירת החודש הקודם
+            # שלב 8: בחירת החודש הקודם
             prev_month = self.get_previous_month_number()
-            month_link = self.wait.until(
-                EC.element_to_be_clickable((By.XPATH, f'//a[@title="{prev_month}"]'))
+            print(f"בוחר חודש {prev_month}...")
+            month_containers = self.wait.until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
             )
+            month_link = month_containers[1].find_element(By.CSS_SELECTOR, f"ul li a[title='{prev_month}']")
             month_link.click()
+            print(f"✓ נבחר חודש {prev_month}")
             time.sleep(1)
             
-            # שלב 11: בחירת מדדי מחירים ואפשרויות
-            print("בוחר מדדי מחירים...")
+            # שלב 9: בחירת עד שנה
             try:
-                # בחירת מדדי מחירים
                 price_index = self.wait.until(
-                    EC.element_to_be_clickable((By.XPATH, '//a[@title="מדדי מחירים"]'))
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
                 )
-                price_index.click()
+                price_link = price_index[2].find_element(By.CSS_SELECTOR, f"ul li a[title='{current_year}']")
+                print(f"price_link !!!!!!!!!!!!!!!!!!!!!!!!!:  {price_link}")
+                price_link.click()
                 time.sleep(1)
                 
-                # בחירת סוג בסיס ראשון
-                first_basis = self.wait.until(
-                    EC.element_to_be_clickable((By.XPATH, '//div[@class="variableBox"]//ul/li[1]/a'))
-                )
-                first_basis.click()
-                time.sleep(1)
-                
-                # בחירת תקופת בסיס ראשונה
-                first_period = self.wait.until(
-                    EC.element_to_be_clickable((By.XPATH, '//div[@class="variableBox"]//ul/li[1]/a'))
-                )
-                first_period.click()
-                print("✓ נבחרו מדדי מחירים")
-                time.sleep(2)
             except Exception as e:
-                print(f"❌ שגיאה בבחירת מדדי מחירים: {e}")
+                print(f"❌ שגיאה בבחירת עד שנה: {e}")
                 return None
-            
+
+            # שלב 10 :בחירת עד חודש
+            try:
+                prev_month = self.get_previous_month_number()
+                ad_month = self.wait.until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBox.Narrow div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
+                )
+                ad_month_link = ad_month[3].find_element(By.CSS_SELECTOR, f"ul li a[title='{prev_month}']")
+                ad_month_link.click()
+                time.sleep(1)
+                
+            except Exception as e:
+                print(f"❌ שגיאה בבחירת עד חודש: {e}")
+                return None
+
+            # שלב 11 :בחירת סוג מדד
+            print("בוחר סוג מדד...")
+            try:
+                # מציאת העמודה "סוג מדד" לפי הכותרת
+                index_type_link = self.wait.until(
+                    EC.element_to_be_clickable((By.XPATH, '//p[@class="boxTitle ng-binding"][contains(text(), "סוג מדד")]/following-sibling::div//ul//li[1]/a'))
+                )
+                print(f"✓ נמצא סוג מדד: {index_type_link.get_attribute('title')}")
+                index_type_link.click()
+                print("✓ נבחר סוג מדד ראשון")
+                time.sleep(1)
+                
+            except Exception as e:
+                print(f"❌ שגיאה בבחירת סוג מדד: {e}")
+                return None
+
+            # שלב 12 :בחירת סוג בסיס
+            print("בוחר סוג בסיס...")
+            try:
+                # מציאת העמודה "סוג בסיס" לפי הכותרת
+                index_type_link = self.wait.until(
+                    EC.element_to_be_clickable((By.XPATH, '//p[@class="boxTitle ng-binding"][contains(text(), "סוג בסיס")]/following-sibling::div//ul//li[1]/a'))
+                )
+                print(f"✓ נמצא סוג בסיס: {index_type_link.get_attribute('title')}")
+                index_type_link.click()
+                print("✓ נבחר סוג בסיס ראשון")
+                time.sleep(1)
+                
+            except Exception as e:
+                print(f"❌ שגיאה בבחירת סוג בסיס: {e}")
+                return None
+
+            # שלב 13 :בחירת תקופת בסיס
+            print("בוחר תקופת בסיס...")
+            try:
+                # מציאת כל האפשרויות של תקופת בסיס
+                period_options = self.wait.until(
+                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane a.ellipsis.ng-binding'))
+                )
+                # בחירת האפשרות הראשונה מהרשימה
+                first_period = period_options[0]
+                print(f"✓ נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
+                first_period.click()
+                print("✓ נבחרה תקופת בסיס ראשונה")
+                time.sleep(1)
+                
+            except Exception as e:
+                print(f"❌ שגיאה בבחירת תקופת בסיס: {e}")
+                return None
+
+
             # שלב 12: המשך לטבלת נתונים
             print("עובר לטבלת נתונים...")
             try:
@@ -492,6 +562,10 @@ class MadadimScraper:
             except Exception as e:
                 print(f"❌ שגיאה במעבר לטבלה: {e}")
                 return None
+            
+
+
+
             
             # שלב 13: חילוץ הערך מהטבלה - לפי הקוד שעבד
             # לפי הקוד שעבד - נבחר תא מסוים בטבלה
