@@ -562,39 +562,50 @@ class MadadimScraper:
             except Exception as e:
                 print(f"❌ שגיאה במעבר לטבלה: {e}")
                 return None
-            
 
-
-
-            
-            # שלב 13: חילוץ הערך מהטבלה - לפי הקוד שעבד
-            # לפי הקוד שעבד - נבחר תא מסוים בטבלה
+            # שלב 13: חילוץ הערך מהטבלה
+            print(f"מחלץ ערך מהטבלה לחודש {prev_month}...")
             try:
-                # נבחר את התא הנכון בטבלה לפי הקוד שעבד
-                selected_cell = self.driver.find_element(By.CSS_SELECTOR, ".k-state-selected:nth-child(11)")
-                selected_cell.click()
-                time.sleep(1)
+                # חיפוש הטבלה
+                table = self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, 'div#grid'))
+                )
+                print(f"✓ נמצאה טבלה")
                 
-                # חילוץ הערך מהתא הנבחר
-                indicator_value = selected_cell.text.strip()
-                print(f"ערך המדד {indicator_name}: {indicator_value}")
+                # מציאת ה-tr עם data-uid (השורה עם הערכים)
+                data_row = table.find_element(By.CSS_SELECTOR, 'tr[data-uid]')
+                print(f"✓ נמצאה שורת נתונים")
+                
+                # מציאת ה-td המתאים לפי מספר החודש
+                # 3 ה-td הראשונים הם כותרות, אז צריך להוסיף 3
+                # חודש 1 = td 4, חודש 8 = td 11 וכן הלאה
+                td_index = prev_month + 3
+                value_cell = data_row.find_element(By.CSS_SELECTOR, f'td:nth-child({td_index})')
+                print(f"✓ נמצא td במיקום {td_index} (חודש {prev_month})")
+                                
+                # גלילה לתא כדי שיהיה גלוי - חשוב לעשות זאת לפני קריאת הערך!
+                print(f"גולל לתא...")
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'nearest', inline: 'center'});", value_cell)
+                time.sleep(2)
+                print(f"✓ גלילה הושלמה")
+                
+                # עכשיו קוראים את הערך אחרי הגלילה
+                indicator_value = value_cell.text.strip()
+                print(f"✓ ערך המדד לחודש {prev_month}: '{indicator_value}'")
+                
+                if not indicator_value:
+                    print("⚠️ הערך ריק, מנסה עם JavaScript...")
+                    indicator_value = self.driver.execute_script("return arguments[0].innerText || arguments[0].textContent;", value_cell).strip()
+                    print(f"✓ ערך מ-JavaScript: '{indicator_value}'")
+                
                 return indicator_value
                 
-            except:
-                # אם לא הצלחנו, ננסה שיטה אחרת
-                print("מנסה שיטת חילוץ חלופית...")
-                try:
-                    # חיפוש הערך בטבלה לפי שם החודש
-                    month_names = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"]
-                    prev_month_name = month_names[prev_month - 1]
-                    
-                    value_cell = self.driver.find_element(By.XPATH, f'//th[contains(text(), "{prev_month_name}")]/following-sibling::td[1]')
-                    indicator_value = value_cell.text.strip()
-                    print(f"ערך המדד {indicator_name} (שיטה חלופית): {indicator_value}")
-                    return indicator_value
-                except:
-                    print("לא הצלחנו לחלץ ערך מהטבלה")
-                    return None
+            except Exception as e:
+                print(f"❌ שגיאה בחילוץ ערך מהטבלה: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+                
             
         except Exception as e:
             print(f"שגיאה בשליפת המדד {indicator_name}: {str(e)}")
