@@ -1,7 +1,15 @@
+# -*- coding: utf-8 -*-
 import datetime
 import os
 import random
 import time
+import sys
+
+# הגדרת encoding ל-PowerShell
+if sys.platform.startswith('win'):
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -137,7 +145,7 @@ class MadadimScraper:
         try:
             print("יוצר Chrome driver...")
             self.driver = webdriver.Chrome(options=options)
-            print("✓ Chrome driver נוצר")
+            print("OK - Chrome driver נוצר")
             
             # הסרת כל המאפיינים שמסגירים אוטומציה - גרסה מתקדמת
             stealth_js = """
@@ -205,19 +213,19 @@ class MadadimScraper:
         };
             """
             self.driver.execute_script(stealth_js)
-            print("✓ הגנות אנטי-זיהוי מתקדמות הופעלו")
+            print("OK הגנות אנטי-זיהוי מתקדמות הופעלו")
             
             # הגדרת חלון
             self.driver.set_window_size(1936, 1048)  # גודל ספציפי שעבד
-            print("✓ גודל חלון הוגדר")
+            print("OK גודל חלון הוגדר")
             
             self.wait = WebDriverWait(self.driver, 20)  # זמן המתנה ארוך יותר
-            print("✓ WebDriverWait הוגדר")
+            print("OK WebDriverWait הוגדר")
             
             print("Chrome driver מוכן לשימוש בהצלחה!")
             
         except Exception as e:
-            print(f"❌ שגיאה בהגדרת דפדפן: {e}")
+            print(f"ERROR שגיאה בהגדרת דפדפן: {e}")
             self.driver = None
         
     def close_driver(self):
@@ -234,7 +242,7 @@ class MadadimScraper:
         else:
             month =  today.month - 1
 
-        if today.day < 15:
+        if today.day <= 15:
             month = month - 1
         
         return month    
@@ -243,6 +251,13 @@ class MadadimScraper:
     def scrape_cbs_indicator(self, indicator_name, indicator_code):
         """שליפת מדד בודד מאתר הלמ"ס"""
         try:
+            # בדיקה אם החלון עדיין פתוח
+            try:
+                self.driver.current_url
+            except:
+                print(f"ERROR - החלון נסגר, יוצר חלון חדש...")
+                self.setup_driver()
+            
             print(f"מתחיל לשלוף את המדד: {indicator_name} (קוד: {indicator_code})")
             
             # פתיחת האתר - בדיוק לפי הקוד שעבד
@@ -263,14 +278,14 @@ class MadadimScraper:
                 
                 try:
                     radio_element.click()
-                    print("✓ רדיו נלחץ בלחיצה רגילה")
+                    print("OK רדיו נלחץ בלחיצה רגילה")
                 except:
                     self.driver.execute_script("arguments[0].click();", radio_element)
-                    print("✓ רדיו נלחץ עם JavaScript")
+                    print("OK רדיו נלחץ עם JavaScript")
                 
                 time.sleep(3)  # המתנה ארוכה אחרי הרדיו
             except Exception as e:
-                print(f"❌ שגיאה ברדיו: {e}")
+                print(f"ERROR שגיאה ברדיו: {e}")
                 return None
             
             # שלב 2: הכנסת הקוד - עם הגנות מרביות וההמתנות
@@ -282,9 +297,9 @@ class MadadimScraper:
                 # בדיקה שהדפדפן עדיין פעיל
                 try:
                     current_url = self.driver.current_url
-                    print(f"✓ דפדפן פעיל: {current_url[:50]}...")
+                    print(f"OK דפדפן פעיל: {current_url[:50]}...")
                 except:
-                    print("❌ דפדפן נסגר!")
+                    print("ERROR דפדפן נסגר!")
                     return None
                 
                 # חיפוש השדה הנכון עם המתנה
@@ -292,7 +307,7 @@ class MadadimScraper:
                 code_field = self.wait.until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "input[ng-model='mainCtrl.codesearch']"))
                 )
-                print("✓ שדה קוד נמצא")
+                print("OK שדה קוד נמצא")
                 
                 # ניקוי השדה בעדינות
                 code_field.clear()
@@ -317,22 +332,22 @@ class MadadimScraper:
                         try:
                             self.driver.current_url
                         except:
-                            print("❌ דפדפן נסגר במהלך הכנסת קוד!")
+                            print("ERROR דפדפן נסגר במהלך הכנסת קוד!")
                             return None
                 
-                print(f"✓ קוד {indicator_code} הוכנס בהצלחה")
+                print(f"OK קוד {indicator_code} הוכנס בהצלחה")
                 time.sleep(3)  # המתנה ארוכה אחרי הכנסת הקוד
                 
                 # בדיקה אחרונה שהדפדפן עדיין פעיל
                 try:
                     self.driver.current_url
-                    print("✓ דפדפן עדיין פעיל אחרי הכנסת קוד")
+                    print("OK דפדפן עדיין פעיל אחרי הכנסת קוד")
                 except:
-                    print("❌ דפדפן נסגר אחרי הכנסת קוד!")
+                    print("ERROR דפדפן נסגר אחרי הכנסת קוד!")
                     return None
                     
             except Exception as e:
-                print(f"❌ שגיאה בהכנסת קוד: {e}")
+                print(f"ERROR שגיאה בהכנסת קוד: {e}")
                 return None
             
             # שלב 3: לחיצה על כפתור המשך
@@ -342,10 +357,10 @@ class MadadimScraper:
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'a.greenBigBtn[data-ng-click="mainCtrl.searchByCode();"]'))
                 )
                 continue_btn.click()
-                print("✓ נלחץ על המשך")
+                print("OK נלחץ על המשך")
                 time.sleep(3)
             except Exception as e:
-                print(f"❌ שגיאה בלחיצת המשך: {e}")
+                print(f"ERROR שגיאה בלחיצת המשך: {e}")
                 return None
 
             
@@ -361,7 +376,7 @@ class MadadimScraper:
                 
                 # בדיקה שיש לפחות 2 נושאים
                 if len(topics) < 2:
-                    print("❌ לא נמצאו מספיק נושאים")
+                    print("ERROR לא נמצאו מספיק נושאים")
                     return None
                 
                 # בחירת הנושא השני (אינדקס 1)
@@ -371,15 +386,15 @@ class MadadimScraper:
                 
                 try:
                     second_topic.click()
-                    print("✓ נבחר הנושא השני בלחיצה רגילה")
+                    print("OK נבחר הנושא השני בלחיצה רגילה")
                 except:
                     # אם נכשל, ננסה JavaScript
                     self.driver.execute_script("arguments[0].click();", second_topic)
-                    print("✓ נבחר הנושא השני עם JavaScript")
+                    print("OK נבחר הנושא השני עם JavaScript")
                 
                 time.sleep(3)
             except Exception as e:
-                print(f"❌ שגיאה בבחירת הנושא השני: {e}")
+                print(f"ERROR שגיאה בבחירת הנושא השני: {e}")
                 return None
 
             
@@ -424,17 +439,17 @@ class MadadimScraper:
                 labels = self.driver.find_elements(By.CSS_SELECTOR, 'label[for^="series_"]')
                 
                 if not labels:
-                    print("❌ לא נמצא צ'ק בוקס")
+                    print("ERROR לא נמצא צ'ק בוקס")
                 else:
                     first_label = labels[0]
                     # סימון הצ'קבוקס דרך JavaScript
                     checkbox_id = first_label.get_attribute('for')
                     script = f"document.getElementById('{checkbox_id}').click();"
                     self.driver.execute_script(script)
-                    print(f"✓ צ'ק בוקס {checkbox_id} סומן בהצלחה")
+                    print(f"OK צ'ק בוקס {checkbox_id} סומן בהצלחה")
 
             except Exception as e:
-                print(f"❌ שגיאה בסימון צ'ק בוקס: {e}")
+                print(f"ERROR שגיאה בסימון צ'ק בוקס: {e}")
 
             
             # לחיצה על המשך לבחירת תקופת זמן
@@ -461,10 +476,10 @@ class MadadimScraper:
                 
                 # לחיצה על השנה
                 year_link.click()
-                print(f"✓ נבחרה שנה {current_year}")
+                print(f"OK נבחרה שנה {current_year}")
                 time.sleep(2)
             except Exception as e:
-                print(f"❌ שגיאה בבחירת שנה: {e}")
+                print(f"ERROR שגיאה בבחירת שנה: {e}")
                 return None
             
             # שלב 8: בחירת החודש הקודם
@@ -475,7 +490,7 @@ class MadadimScraper:
             )
             month_link = month_containers[1].find_element(By.CSS_SELECTOR, f"ul li a[title='{prev_month}']")
             month_link.click()
-            print(f"✓ נבחר חודש {prev_month}")
+            print(f"OK נבחר חודש {prev_month}")
             time.sleep(1)
             
             # שלב 9: בחירת עד שנה
@@ -489,7 +504,7 @@ class MadadimScraper:
                 time.sleep(1)
                 
             except Exception as e:
-                print(f"❌ שגיאה בבחירת עד שנה: {e}")
+                print(f"ERROR שגיאה בבחירת עד שנה: {e}")
                 return None
 
             # שלב 10 :בחירת עד חודש
@@ -503,7 +518,7 @@ class MadadimScraper:
                 time.sleep(1)
                 
             except Exception as e:
-                print(f"❌ שגיאה בבחירת עד חודש: {e}")
+                print(f"ERROR שגיאה בבחירת עד חודש: {e}")
                 return None
 
             # שלב 11 :בחירת סוג מדד
@@ -513,13 +528,13 @@ class MadadimScraper:
                 index_type_link = self.wait.until(
                     EC.element_to_be_clickable((By.XPATH, '//p[@class="boxTitle ng-binding"][contains(text(), "סוג מדד")]/following-sibling::div//ul//li[1]/a'))
                 )
-                print(f"✓ נמצא סוג מדד: {index_type_link.get_attribute('title')}")
+                print(f"OK נמצא סוג מדד: {index_type_link.get_attribute('title')}")
                 index_type_link.click()
-                print("✓ נבחר סוג מדד ראשון")
+                print("OK נבחר סוג מדד ראשון")
                 time.sleep(1)
                 
             except Exception as e:
-                print(f"❌ שגיאה בבחירת סוג מדד: {e}")
+                print(f"ERROR שגיאה בבחירת סוג מדד: {e}")
                 return None
 
             # שלב 12 :בחירת סוג בסיס
@@ -529,13 +544,13 @@ class MadadimScraper:
                 index_type_link = self.wait.until(
                     EC.element_to_be_clickable((By.XPATH, '//p[@class="boxTitle ng-binding"][contains(text(), "סוג בסיס")]/following-sibling::div//ul//li[1]/a'))
                 )
-                print(f"✓ נמצא סוג בסיס: {index_type_link.get_attribute('title')}")
+                print(f"OK נמצא סוג בסיס: {index_type_link.get_attribute('title')}")
                 index_type_link.click()
-                print("✓ נבחר סוג בסיס ראשון")
+                print("OK נבחר סוג בסיס ראשון")
                 time.sleep(1)
                 
             except Exception as e:
-                print(f"❌ שגיאה בבחירת סוג בסיס: {e}")
+                print(f"ERROR שגיאה בבחירת סוג בסיס: {e}")
                 return None
 
             # שלב 13 :בחירת תקופת בסיס
@@ -547,13 +562,13 @@ class MadadimScraper:
                 )
                 # בחירת האפשרות הראשונה מהרשימה
                 first_period = period_options[0]
-                print(f"✓ נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
+                print(f"OK נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
                 first_period.click()
-                print("✓ נבחרה תקופת בסיס ראשונה")
+                print("OK נבחרה תקופת בסיס ראשונה")
                 time.sleep(1)
                 
             except Exception as e:
-                print(f"❌ שגיאה בבחירת תקופת בסיס: {e}")
+                print(f"ERROR שגיאה בבחירת תקופת בסיס: {e}")
                 return None
 
 
@@ -564,10 +579,10 @@ class MadadimScraper:
                     EC.element_to_be_clickable((By.LINK_TEXT, "המשך לטבלת הנתונים"))
                 )
                 continue_table_btn.click()
-                print("✓ עבר לטבלת נתונים")
+                print("OK עבר לטבלת נתונים")
                 time.sleep(5)  # המתנה לטעינת הטבלה
             except Exception as e:
-                print(f"❌ שגיאה במעבר לטבלה: {e}")
+                print(f"ERROR שגיאה במעבר לטבלה: {e}")
                 return None
 
             # שלב 13: חילוץ הערך מהטבלה
@@ -577,38 +592,46 @@ class MadadimScraper:
                 table = self.wait.until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, 'div#grid'))
                 )
-                print(f"✓ נמצאה טבלה")
+                print(f"OK נמצאה טבלה")
                 
                 # מציאת ה-tr עם data-uid (השורה עם הערכים)
                 data_row = table.find_element(By.CSS_SELECTOR, 'tr[data-uid]')
-                print(f"✓ נמצאה שורת נתונים")
+                print(f"OK נמצאה שורת נתונים")
                 
                 # מציאת ה-td המתאים לפי מספר החודש
                 # 3 ה-td הראשונים הם כותרות, אז צריך להוסיף 3
                 # חודש 1 = td 4, חודש 8 = td 11 וכן הלאה
                 td_index = prev_month + 3
                 value_cell = data_row.find_element(By.CSS_SELECTOR, f'td:nth-child({td_index})')
-                print(f"✓ נמצא td במיקום {td_index} (חודש {prev_month})")
+                print(f"OK נמצא td במיקום {td_index} (חודש {prev_month})")
                                 
                 # גלילה לתא כדי שיהיה גלוי - חשוב לעשות זאת לפני קריאת הערך!
                 print(f"גולל לתא...")
                 self.driver.execute_script("arguments[0].scrollIntoView({block: 'nearest', inline: 'center'});", value_cell)
                 time.sleep(2)
-                print(f"✓ גלילה הושלמה")
+                print(f"OK גלילה הושלמה")
                 
                 # עכשיו קוראים את הערך אחרי הגלילה
                 indicator_value = value_cell.text.strip()
-                print(f"✓ ערך המדד לחודש {prev_month}: '{indicator_value}'")
+                print(f"OK ערך המדד לחודש {prev_month}: '{indicator_value}'")
                 
                 if not indicator_value:
-                    print("⚠️ הערך ריק, מנסה עם JavaScript...")
+                    print("WARNING הערך ריק, מנסה עם JavaScript...")
                     indicator_value = self.driver.execute_script("return arguments[0].innerText || arguments[0].textContent;", value_cell).strip()
-                    print(f"✓ ערך מ-JavaScript: '{indicator_value}'")
+                    print(f"OK ערך מ-JavaScript: '{indicator_value}'")
+                
+                # עיגול ל-2 ספרות אחרי הנקודה
+                try:
+                    float_value = float(indicator_value)
+                    indicator_value = f"{float_value:.2f}"
+                    print(f"OK ערך מעוגל: '{indicator_value}'")
+                except:
+                    print(f"WARNING לא ניתן להמיר לערך מספרי: '{indicator_value}'")
                 
                 return indicator_value
                 
             except Exception as e:
-                print(f"❌ שגיאה בחילוץ ערך מהטבלה: {e}")
+                print(f"ERROR שגיאה בחילוץ ערך מהטבלה: {e}")
                 import traceback
                 traceback.print_exc()
                 return None
@@ -623,6 +646,7 @@ class MadadimScraper:
         self.setup_driver()
         
         results = {}
+        bls_value = None
         
         try:
             for indicator_name, indicator_code in self.cbs_indicators.items():
@@ -632,11 +656,164 @@ class MadadimScraper:
                     
                 # הפסקה קצרה בין מדדים
                 time.sleep(2)
+            
+            # שליפת נתוני BLS
+            print("\nמתחיל לשלוף נתוני BLS...")
+            bls_value = self.scrape_bls_cpi()
+            if bls_value:
+                print(f"OK נתון BLS נשלף: {bls_value}")
+            else:
+                print("ERROR לא הצליח לשלוף נתון BLS")
                 
         finally:
             self.close_driver()
         
-        return results
+        return results, bls_value
+    
+    def scrape_bls_cpi(self):
+        """שליפת נתוני CPI מאתר BLS"""
+        try:
+            # בדיקה אם החלון עדיין פתוח
+            try:
+                self.driver.current_url
+            except:
+                print(f"ERROR - החלון נסגר, יוצר חלון חדש...")
+                self.setup_driver()
+            
+            print("מתחיל לשלוף נתוני CPI מאתר BLS...")
+            
+            # פתיחת האתר
+            self.driver.get(self.bls_url)
+            time.sleep(5)  # המתנה ארוכה יותר לטעינת JavaScript
+            
+            # המתנה לטעינת הטבלה - ננסה כמה אפשרויות
+            print("מחכה לטעינת הטבלה...")
+            try:
+                # נסיון 1: המתנה לטבלה רגילה
+                self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.dataTable")))
+                print("OK נמצאה טבלת dataTable")
+            except:
+                try:
+                    # נסיון 2: המתנה לטבלה עם id
+                    self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table[id*='DataTables']")))
+                    print("OK נמצאה טבלת DataTables")
+                except:
+                    # נסיון 3: המתנה לכל טבלה
+                    self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
+                    print("OK נמצאה טבלה כלשהי")
+            
+            # חיפוש הטבלה עם הנתונים - ננסה כמה אפשרויות
+            table = None
+            try:
+                # נסיון 1: טבלה עם class='dataTables_scrollBody'
+                table = self.driver.find_element(By.CSS_SELECTOR, ".dataTables_scrollBody")
+                print("OK נמצאה טבלת dataTables_scrollBody")
+            except:
+                try:
+                    # נסיון 2: טבלה עם class='dataTable'
+                    table = self.driver.find_element(By.CSS_SELECTOR, ".dataTable")
+                    print("OK נמצאה טבלת dataTable")
+                except:
+                    try:
+                        # נסיון 3: כל טבלה
+                        tables = self.driver.find_elements(By.TAG_NAME, "table")
+                        if tables:
+                            table = tables[0]  # ניקח את הטבלה הראשונה
+                            print(f"OK נמצאה טבלה ראשונה מתוך {len(tables)} טבלאות")
+                    except:
+                        print("ERROR לא נמצאה טבלה")
+                        return None
+            
+            if not table:
+                print("ERROR לא נמצאה טבלה מתאימה")
+                return None
+            
+            # קבלת החודש הקודם בפורמט הנכון
+            prev_month = self.get_previous_month_number()
+            prev_year = datetime.date.today().year
+            
+            # אם החודש הוא דצמבר של השנה הקודמת
+            if prev_month == 12 and datetime.date.today().month == 1:
+                prev_year = prev_year - 1
+            
+            # יצירת period בפורמט MXX
+            period = f"M{prev_month:02d}"
+            print(f"מחפש נתונים לחודש: {period}, שנה: {prev_year}")
+            
+            # המתנה נוספת לטעינת הנתונים
+            time.sleep(3)
+            
+            # חיפוש השורות - ננסה כמה דרכים
+            rows = []
+            try:
+                # נסיון 1: חיפוש בתוך הטבלה
+                rows = table.find_elements(By.TAG_NAME, "tr")
+                print(f"נמצאו {len(rows)} שורות בטבלה")
+            except:
+                # נסיון 2: חיפוש בכל הדף
+                rows = self.driver.find_elements(By.CSS_SELECTOR, "table tr")
+                print(f"נמצאו {len(rows)} שורות בדף")
+            
+            if not rows:
+                print("ERROR לא נמצאו שורות בטבלה")
+                return None
+            
+            # חיפוש השורה עם השנה והחודש הנכונים
+            target_value = None
+            print("מחפש שורה עם הנתונים הנכונים...")
+            
+            for i, row in enumerate(rows):
+                try:
+                    cells = row.find_elements(By.TAG_NAME, "td")
+                    if len(cells) >= 4:  # צריך לפחות 4 עמודות
+                        year_cell = cells[0].text.strip()
+                        period_cell = cells[1].text.strip()
+                        label_cell = cells[2].text.strip()
+                        value_cell = cells[3].text.strip()
+                        
+                        print(f"שורה {i}: שנה={year_cell}, period={period_cell}, label={label_cell}, value={value_cell}")
+                        
+                    # בדיקה אם זה השורה הנכונה
+                    if year_cell == str(prev_year) and period_cell == period:
+                        target_value = value_cell
+                        print(f"OK נמצא נתון לחודש {period}/{prev_year}: {target_value}")
+                        
+                        # שמירה על הערך המדויק ללא עיגול
+                        print(f"OK ערך BLS מקורי: '{target_value}'")
+                        
+                        break
+                except Exception as e:
+                    print(f"שגיאה בעיבוד שורה {i}: {e}")
+                    continue
+            
+            if target_value:
+                print(f"OK נתון CPI נשלף בהצלחה: {target_value}")
+                return target_value
+            else:
+                print(f"ERROR לא נמצא נתון לחודש {period}/{prev_year}")
+                print("נסיון חיפוש חלופי...")
+                
+                # נסיון חלופי - חיפוש לפי טקסט
+                try:
+                    # חיפוש אלמנט שמכיל את התאריך
+                    date_element = self.driver.find_element(By.XPATH, f"//td[contains(text(), '{prev_year}') and following-sibling::td[contains(text(), '{period}')]]")
+                    value_element = date_element.find_element(By.XPATH, "./following-sibling::td[2]")
+                    target_value = value_element.text.strip()
+                    print(f"OK נמצא נתון בחיפוש חלופי: {target_value}")
+                    
+                    # שמירה על הערך המדויק ללא עיגול
+                    print(f"OK ערך BLS חלופי מקורי: '{target_value}'")
+                    
+                    return target_value
+                except:
+                    print("ERROR גם החיפוש החלופי נכשל")
+                    return None
+                
+        except Exception as e:
+            print(f"ERROR שגיאה בשליפת נתוני BLS: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def update_data_file_with_values(self, cbs_values, bls_value=None):
         """עדכון קובץ הנתונים עם הערכים שנשלפו"""
@@ -648,13 +825,28 @@ class MadadimScraper:
         
         # עדכון הערכים
         for indicator_name, value in cbs_values.items():
-            old_line = f"{indicator_name} ({self.cbs_indicators[indicator_name]}): "
-            new_line = f"{indicator_name} ({self.cbs_indicators[indicator_name]}): {value}"
-            content = content.replace(old_line, new_line)
+            # חיפוש השורה עם השם והקוד
+            pattern = f"{indicator_name} ({self.cbs_indicators[indicator_name]}): "
+            # בדיקה אם השורה כבר מכילה ערך
+            if pattern in content:
+                # מציאת השורה המלאה
+                lines = content.split('\n')
+                for i, line in enumerate(lines):
+                    if line.startswith(pattern):
+                        # החלפת השורה
+                        lines[i] = f"{pattern}{value}"
+                        break
+                content = '\n'.join(lines)
         
         if bls_value:
-            content = content.replace("Consumer Price Index (CUUR0000SA0): ", 
-                                    f"Consumer Price Index (CUUR0000SA0): {bls_value}")
+            bls_pattern = "Consumer Price Index (CUUR0000SA0): "
+            if bls_pattern in content:
+                lines = content.split('\n')
+                for i, line in enumerate(lines):
+                    if line.startswith(bls_pattern):
+                        lines[i] = f"{bls_pattern}{bls_value}"
+                        break
+                content = '\n'.join(lines)
         
         # כתיבה חזרה לקובץ
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -669,25 +861,23 @@ if __name__ == "__main__":
     # יצירת קובץ בסיסי
     scraper.create_data_file()
     
-    # בדיקה עם מדד אחד ראשון - מחירים לצרכן
-    print("\nמתחיל בדיקה עם מדד אחד...")
-    scraper.setup_driver()
+    # שליפת כל המדדים
+    print("\nמתחיל לשלוף את כל המדדים...")
+    print(f"מספר מדדי CBS: {len(scraper.cbs_indicators)}")
     
-    try:
-        # בדיקה עם המדד הראשון
-        first_indicator = list(scraper.cbs_indicators.items())[0]  # מחירים לצרכן
-        indicator_name, indicator_code = first_indicator
+    # שליפת כל המדדים
+    cbs_results, bls_value = scraper.scrape_all_cbs_indicators()
+    
+    # עדכון הקובץ עם כל הערכים
+    if cbs_results or bls_value:
+        scraper.update_data_file_with_values(cbs_results, bls_value)
+        print(f"\nOK סיכום התוצאות:")
+        print(f"מדדי CBS שנשלפו: {len(cbs_results)}")
+        for name, value in cbs_results.items():
+            print(f"  - {name}: {value}")
+        if bls_value:
+            print(f"מדד BLS: {bls_value}")
+    else:
+        print("ERROR לא הצליח לשלוף שום נתון")
         
-        value = scraper.scrape_cbs_indicator(indicator_name, indicator_code)
-        
-        if value:
-            print(f"הבדיקה הצליחה! ערך המדד: {value}")
-            # עדכון הקובץ עם הערך הזה
-            scraper.update_data_file_with_values({indicator_name: value})
-        else:
-            print("הבדיקה נכשלה")
-            
-    finally:
-        scraper.close_driver()
-        
-    print("בדיקה הושלמה")
+    print("שליפת כל המדדים הושלמה")
