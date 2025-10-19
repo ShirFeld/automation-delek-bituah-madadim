@@ -923,15 +923,15 @@ class MainApplication:
             self.root.update()
             
             # שליפת כל המדדים
-            cbs_values = scraper.scrape_all_cbs_indicators()
+            cbs_results, bls_value = scraper.scrape_all_cbs_indicators()
             
-            if cbs_values:
+            if cbs_results or bls_value:
                 # עדכון הקובץ
-                scraper.update_data_file_with_values(cbs_values)
+                scraper.update_data_file_with_values(cbs_results, bls_value)
                 
                 success_label = tk.Label(
                     self.results_frame,
-                    text=f"הושלמה שליפת {len(cbs_values)} מדדים מהלמ\"ס!",
+                    text=f"הושלמה שליפת {len(cbs_results)} מדדים מהלמ\"ס!",
                     font=self.fonts['text'],
                     bg='#f0f0f0',
                     fg='green'
@@ -940,8 +940,10 @@ class MainApplication:
                 
                 # הצגת המדדים ששלפנו
                 results_text = "מדדים ששלפנו:\n"
-                for name, value in cbs_values.items():
+                for name, value in cbs_results.items():
                     results_text += f"• {name}: {value}\n"
+                if bls_value:
+                    results_text += f"• Consumer Price Index (BLS): {bls_value}\n"
                 
                 results_label = tk.Label(
                     self.results_frame,

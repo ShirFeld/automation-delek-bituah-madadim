@@ -290,15 +290,12 @@ class MadadimScraper:
                 try:
                     radio_element.click()
                     print("OK רדיו נלחץ בלחיצה רגילה")
-                    print("OK רדיו נלחץ בלחיצה רגילה")
                 except:
                     self.driver.execute_script("arguments[0].click();", radio_element)
-                    print("OK רדיו נלחץ עם JavaScript")
                     print("OK רדיו נלחץ עם JavaScript")
                 
                 time.sleep(3)  # המתנה ארוכה אחרי הרדיו
             except Exception as e:
-                print(f"ERROR שגיאה ברדיו: {e}")
                 print(f"ERROR שגיאה ברדיו: {e}")
                 return None
             
@@ -312,9 +309,7 @@ class MadadimScraper:
                 try:
                     current_url = self.driver.current_url
                     print(f"OK דפדפן פעיל: {current_url[:50]}...")
-                    print(f"OK דפדפן פעיל: {current_url[:50]}...")
                 except:
-                    print("ERROR דפדפן נסגר!")
                     print("ERROR דפדפן נסגר!")
                     return None
                 
@@ -323,7 +318,6 @@ class MadadimScraper:
                 code_field = self.wait.until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "input[ng-model='mainCtrl.codesearch']"))
                 )
-                print("OK שדה קוד נמצא")
                 print("OK שדה קוד נמצא")
                 
                 # ניקוי השדה בעדינות
@@ -350,10 +344,8 @@ class MadadimScraper:
                             self.driver.current_url
                         except:
                             print("ERROR דפדפן נסגר במהלך הכנסת קוד!")
-                            print("ERROR דפדפן נסגר במהלך הכנסת קוד!")
                             return None
                 
-                print(f"OK קוד {indicator_code} הוכנס בהצלחה")
                 print(f"OK קוד {indicator_code} הוכנס בהצלחה")
                 time.sleep(3)  # המתנה ארוכה אחרי הכנסת הקוד
                 
@@ -361,14 +353,11 @@ class MadadimScraper:
                 try:
                     self.driver.current_url
                     print("OK דפדפן עדיין פעיל אחרי הכנסת קוד")
-                    print("OK דפדפן עדיין פעיל אחרי הכנסת קוד")
                 except:
-                    print("ERROR דפדפן נסגר אחרי הכנסת קוד!")
                     print("ERROR דפדפן נסגר אחרי הכנסת קוד!")
                     return None
                     
             except Exception as e:
-                print(f"ERROR שגיאה בהכנסת קוד: {e}")
                 print(f"ERROR שגיאה בהכנסת קוד: {e}")
                 return None
             
@@ -380,10 +369,8 @@ class MadadimScraper:
                 )
                 continue_btn.click()
                 print("OK נלחץ על המשך")
-                print("OK נלחץ על המשך")
                 time.sleep(3)
             except Exception as e:
-                print(f"ERROR שגיאה בלחיצת המשך: {e}")
                 print(f"ERROR שגיאה בלחיצת המשך: {e}")
                 return None
 
@@ -401,7 +388,6 @@ class MadadimScraper:
                 # בדיקה שיש לפחות 2 נושאים
                 if len(topics) < 2:
                     print("ERROR לא נמצאו מספיק נושאים")
-                    print("ERROR לא נמצאו מספיק נושאים")
                     return None
                 
                 # בחירת הנושא השני (אינדקס 1)
@@ -412,16 +398,13 @@ class MadadimScraper:
                 try:
                     second_topic.click()
                     print("OK נבחר הנושא השני בלחיצה רגילה")
-                    print("OK נבחר הנושא השני בלחיצה רגילה")
                 except:
                     # אם נכשל, ננסה JavaScript
                     self.driver.execute_script("arguments[0].click();", second_topic)
                     print("OK נבחר הנושא השני עם JavaScript")
-                    print("OK נבחר הנושא השני עם JavaScript")
                 
                 time.sleep(3)
             except Exception as e:
-                print(f"ERROR שגיאה בבחירת הנושא השני: {e}")
                 print(f"ERROR שגיאה בבחירת הנושא השני: {e}")
                 return None
 
@@ -468,7 +451,6 @@ class MadadimScraper:
                 
                 if not labels:
                     print("ERROR לא נמצא צ'ק בוקס")
-                    print("ERROR לא נמצא צ'ק בוקס")
                 else:
                     first_label = labels[0]
                     # סימון הצ'קבוקס דרך JavaScript
@@ -476,10 +458,8 @@ class MadadimScraper:
                     script = f"document.getElementById('{checkbox_id}').click();"
                     self.driver.execute_script(script)
                     print(f"OK צ'ק בוקס {checkbox_id} סומן בהצלחה")
-                    print(f"OK צ'ק בוקס {checkbox_id} סומן בהצלחה")
 
             except Exception as e:
-                print(f"ERROR שגיאה בסימון צ'ק בוקס: {e}")
                 print(f"ERROR שגיאה בסימון צ'ק בוקס: {e}")
 
             
@@ -508,10 +488,8 @@ class MadadimScraper:
                 # לחיצה על השנה
                 year_link.click()
                 print(f"OK נבחרה שנה {current_year}")
-                print(f"OK נבחרה שנה {current_year}")
                 time.sleep(2)
             except Exception as e:
-                print(f"ERROR שגיאה בבחירת שנה: {e}")
                 print(f"ERROR שגיאה בבחירת שנה: {e}")
                 return None
             
@@ -523,7 +501,6 @@ class MadadimScraper:
             )
             month_link = month_containers[1].find_element(By.CSS_SELECTOR, f"ul li a[title='{prev_month}']")
             month_link.click()
-            print(f"OK נבחר חודש {prev_month}")
             print(f"OK נבחר חודש {prev_month}")
             time.sleep(1)
             
@@ -539,7 +516,6 @@ class MadadimScraper:
                 
             except Exception as e:
                 print(f"ERROR שגיאה בבחירת עד שנה: {e}")
-                print(f"ERROR שגיאה בבחירת עד שנה: {e}")
                 return None
 
             # שלב 10 :בחירת עד חודש
@@ -554,7 +530,6 @@ class MadadimScraper:
                 
             except Exception as e:
                 print(f"ERROR שגיאה בבחירת עד חודש: {e}")
-                print(f"ERROR שגיאה בבחירת עד חודש: {e}")
                 return None
 
             # שלב 11 :בחירת סוג מדד
@@ -565,14 +540,11 @@ class MadadimScraper:
                     EC.element_to_be_clickable((By.XPATH, '//p[@class="boxTitle ng-binding"][contains(text(), "סוג מדד")]/following-sibling::div//ul//li[1]/a'))
                 )
                 print(f"OK נמצא סוג מדד: {index_type_link.get_attribute('title')}")
-                print(f"OK נמצא סוג מדד: {index_type_link.get_attribute('title')}")
                 index_type_link.click()
-                print("OK נבחר סוג מדד ראשון")
                 print("OK נבחר סוג מדד ראשון")
                 time.sleep(1)
                 
             except Exception as e:
-                print(f"ERROR שגיאה בבחירת סוג מדד: {e}")
                 print(f"ERROR שגיאה בבחירת סוג מדד: {e}")
                 return None
 
@@ -584,14 +556,11 @@ class MadadimScraper:
                     EC.element_to_be_clickable((By.XPATH, '//p[@class="boxTitle ng-binding"][contains(text(), "סוג בסיס")]/following-sibling::div//ul//li[1]/a'))
                 )
                 print(f"OK נמצא סוג בסיס: {index_type_link.get_attribute('title')}")
-                print(f"OK נמצא סוג בסיס: {index_type_link.get_attribute('title')}")
                 index_type_link.click()
-                print("OK נבחר סוג בסיס ראשון")
                 print("OK נבחר סוג בסיס ראשון")
                 time.sleep(1)
                 
             except Exception as e:
-                print(f"ERROR שגיאה בבחירת סוג בסיס: {e}")
                 print(f"ERROR שגיאה בבחירת סוג בסיס: {e}")
                 return None
 
@@ -605,14 +574,11 @@ class MadadimScraper:
                 # בחירת האפשרות הראשונה מהרשימה
                 first_period = period_options[0]
                 print(f"OK נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
-                print(f"OK נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
                 first_period.click()
-                print("OK נבחרה תקופת בסיס ראשונה")
                 print("OK נבחרה תקופת בסיס ראשונה")
                 time.sleep(1)
                 
             except Exception as e:
-                print(f"ERROR שגיאה בבחירת תקופת בסיס: {e}")
                 print(f"ERROR שגיאה בבחירת תקופת בסיס: {e}")
                 return None
 
@@ -625,10 +591,8 @@ class MadadimScraper:
                 )
                 continue_table_btn.click()
                 print("OK עבר לטבלת נתונים")
-                print("OK עבר לטבלת נתונים")
                 time.sleep(5)  # המתנה לטעינת הטבלה
             except Exception as e:
-                print(f"ERROR שגיאה במעבר לטבלה: {e}")
                 print(f"ERROR שגיאה במעבר לטבלה: {e}")
                 return None
 
@@ -640,11 +604,9 @@ class MadadimScraper:
                     EC.presence_of_element_located((By.CSS_SELECTOR, 'div#grid'))
                 )
                 print(f"OK נמצאה טבלה")
-                print(f"OK נמצאה טבלה")
                 
                 # מציאת ה-tr עם data-uid (השורה עם הערכים)
                 data_row = table.find_element(By.CSS_SELECTOR, 'tr[data-uid]')
-                print(f"OK נמצאה שורת נתונים")
                 print(f"OK נמצאה שורת נתונים")
                 
                 # מציאת ה-td המתאים לפי מספר החודש
@@ -653,22 +615,18 @@ class MadadimScraper:
                 td_index = prev_month + 3
                 value_cell = data_row.find_element(By.CSS_SELECTOR, f'td:nth-child({td_index})')
                 print(f"OK נמצא td במיקום {td_index} (חודש {prev_month})")
-                print(f"OK נמצא td במיקום {td_index} (חודש {prev_month})")
                                 
                 # גלילה לתא כדי שיהיה גלוי - חשוב לעשות זאת לפני קריאת הערך!
                 print(f"גולל לתא...")
                 self.driver.execute_script("arguments[0].scrollIntoView({block: 'nearest', inline: 'center'});", value_cell)
                 time.sleep(2)
                 print(f"OK גלילה הושלמה")
-                print(f"OK גלילה הושלמה")
                 
                 # עכשיו קוראים את הערך אחרי הגלילה
                 indicator_value = value_cell.text.strip()
                 print(f"OK ערך המדד לחודש {prev_month}: '{indicator_value}'")
-                print(f"OK ערך המדד לחודש {prev_month}: '{indicator_value}'")
                 
                 if not indicator_value:
-                    print("WARNING הערך ריק, מנסה עם JavaScript...")
                     print("WARNING הערך ריק, מנסה עם JavaScript...")
                     indicator_value = self.driver.execute_script("return arguments[0].innerText || arguments[0].textContent;", value_cell).strip()
                     print(f"OK ערך מ-JavaScript: '{indicator_value}'")
@@ -676,7 +634,6 @@ class MadadimScraper:
                 return indicator_value
                 
             except Exception as e:
-                print(f"ERROR שגיאה בחילוץ ערך מהטבלה: {e}")
                 print(f"ERROR שגיאה בחילוץ ערך מהטבלה: {e}")
                 import traceback
                 traceback.print_exc()
@@ -775,12 +732,23 @@ class MadadimScraper:
                 return None
             
             # קבלת החודש הקודם בפורמט הנכון
-            prev_month = self.get_previous_month_number()
-            prev_year = datetime.date.today().year
+            today = datetime.today()
+            current_time = today.time()
             
-            # אם החודש הוא דצמבר של השנה הקודמת
-            if prev_month == 12 and datetime.date.today().month == 1:
-                prev_year = prev_year - 1
+            # חישוב החודש והשנה הקודמים (זהה ללוגיקה של get_previous_month_filename)
+            if today.month == 1:
+                prev_month = 12
+                prev_year = today.year - 1
+            else:
+                prev_month = today.month - 1
+                prev_year = today.year
+            
+            # אם היום <= 15 והשעה לפני 18:30, נחזור עוד חודש אחורה
+            if today.day <= 15 and current_time < dt_time(18, 30):
+                prev_month -= 1
+                if prev_month == 0:
+                    prev_month = 12
+                    prev_year -= 1
             
             # יצירת period בפורמט MXX
             period = f"M{prev_month:02d}"
@@ -865,38 +833,43 @@ class MadadimScraper:
         """עדכון קובץ הנתונים עם הערכים שנשלפו"""
         file_path = self.get_file_path()
         
+        print(f"מעדכן קובץ: {file_path}")
+        print(f"מספר ערכי CBS לעדכון: {len(cbs_values) if cbs_values else 0}")
+        
         # קריאת הקובץ הקיים
         with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+            lines = f.readlines()
         
-        # עדכון הערכים
+        # עדכון הערכים - עובדים ישירות על רשימת השורות
         for indicator_name, value in cbs_values.items():
             # חיפוש השורה עם השם והקוד
             pattern = f"{indicator_name} ({self.cbs_indicators[indicator_name]}): "
-            # בדיקה אם השורה כבר מכילה ערך
-            if pattern in content:
-                # מציאת השורה המלאה
-                lines = content.split('\n')
-                for i, line in enumerate(lines):
-                    if line.startswith(pattern):
-                        # החלפת השורה
-                        lines[i] = f"{pattern}{value}"
-                        break
-                content = '\n'.join(lines)
+            print(f"מחפש דפוס: '{pattern}' עם ערך: {value}")
+            
+            for i, line in enumerate(lines):
+                if line.startswith(pattern):
+                    # החלפת השורה
+                    lines[i] = f"{pattern}{value}\n"
+                    print(f"✅ עודכנה שורה {i}: {indicator_name} = {value}")
+                    break
+            else:
+                print(f"⚠️ לא נמצא דפוס: '{pattern}'")
         
         if bls_value:
             bls_pattern = "Consumer Price Index (CUUR0000SA0): "
-            if bls_pattern in content:
-                lines = content.split('\n')
-                for i, line in enumerate(lines):
-                    if line.startswith(bls_pattern):
-                        lines[i] = f"{bls_pattern}{bls_value}"
-                        break
-                content = '\n'.join(lines)
+            print(f"מחפש דפוס BLS: '{bls_pattern}' עם ערך: {bls_value}")
+            
+            for i, line in enumerate(lines):
+                if line.startswith(bls_pattern):
+                    lines[i] = f"{bls_pattern}{bls_value}\n"
+                    print(f"✅ עודכנה שורה {i}: BLS = {bls_value}")
+                    break
+            else:
+                print(f"⚠️ לא נמצא דפוס BLS: '{bls_pattern}'")
         
         # כתיבה חזרה לקובץ
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+            f.writelines(lines)
         
         print(f"הקובץ עודכן בהצלחה: {file_path}")
 
