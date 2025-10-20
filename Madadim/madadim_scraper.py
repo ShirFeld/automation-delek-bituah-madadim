@@ -567,20 +567,46 @@ class MadadimScraper:
             # שלב 13 :בחירת תקופת בסיס
             print("בוחר תקופת בסיס...")
             try:
-                # מציאת כל האפשרויות של תקופת בסיס
-                period_options = self.wait.until(
-                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane a.ellipsis.ng-binding'))
-                )
-                # בחירת האפשרות הראשונה מהרשימה
-                first_period = period_options[0]
-                print(f"OK נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
-                first_period.click()
-                print("OK נבחרה תקופת בסיס ראשונה")
-                time.sleep(1)
-                
-            except Exception as e:
-                print(f"ERROR שגיאה בבחירת תקופת בסיס: {e}")
+                # ניסיון ראשון (הישן)
+                try:
+                    # מציאת כל האפשרויות של תקופת בסיס (הגרסה הגנרית)
+                    period_options = self.wait.until(
+                        EC.presence_of_all_elements_located((
+                            By.CSS_SELECTOR,
+                            'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane a.ellipsis.ng-binding'
+                        ))
+                    )
+                    first_period = period_options[0]
+                    print(f"OK נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
+                    first_period.click()
+                    print("OK נבחרה תקופת בסיס ראשונה (ניסיון ראשון)")
+                    time.sleep(1)
+
+                except Exception as e:
+                    print(f"INFO ניסיון ראשון נכשל ({e}), מנסה גרסה חלופית...")
+
+                    # ניסיון שני (החדש עם control-id)
+                    try:
+                        period_options = self.wait.until(
+                            EC.presence_of_all_elements_located((
+                                By.CSS_SELECTOR,
+                                "li[control-id=\"'basePeriods'\"] div.variableBoxInner.scroll-pane ul.scroll-pane-inner a.ellipsis.ng-binding"
+                            ))
+                        )
+                        first_period = period_options[0]
+                        print(f"OK נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
+                        first_period.click()
+                        print("OK נבחרה תקופת בסיס ראשונה (ניסיון שני)")
+                        time.sleep(1)
+
+                    except Exception as e2:
+                        print(f"ERROR שני הניסיונות לבחירת תקופת בסיס נכשלו: {e2}")
+                        return None
+
+            except Exception as outer_e:
+                print(f"שגיאה כללית בתהליך בחירת תקופת בסיס: {outer_e}")
                 return None
+
 
 
             # שלב 12: המשך לטבלת נתונים
