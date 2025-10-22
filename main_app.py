@@ -360,7 +360,7 @@ class MainApplication:
                     # בדיקה אם יש CAPTCHA
                     page_source = temp_scraper.driver.page_source
                     if "Radware" in page_source or "captcha" in page_source.lower():
-                        print("⚠️ זוהה CAPTCHA - ממתין עוד קצת...")
+                        print("זוהה CAPTCHA - ממתין עוד קצת...")
                         time.sleep(10)
                         page_source = temp_scraper.driver.page_source
                     
@@ -373,24 +373,34 @@ class MainApplication:
                     fuel_data = temp_scraper.extract_fuel_data(soup)
                     
                     if fuel_data and len(fuel_data) > 0:
-                        print("✅ נמצאו נתונים אמיתיים מהאתר - משתמש בהם")
-                        temp_scraper.save_to_text_file(fuel_data)
-                        temp_scraper.save_to_database(fuel_data)
+                        print("נמצאו נתונים אמיתיים מהאתר - משתמש בהם")
+                        
+                        # שליפת מחיר שירות עצמי מאתר delekulator
+                        date_from_data = fuel_data[0]['date']
+                        date_parts = date_from_data.split('/')
+                        month = int(date_parts[1])
+                        year = int(date_parts[2])
+                        
+                        print("\nשולף מחיר שירות עצמי מאתר delekulator...")
+                        self_service_price = temp_scraper.scrape_self_service_price(month, year)
+                        if self_service_price:
+                            print(f"נמצא מחיר שירות עצמי: {self_service_price}")
+                        else:
+                            print("לא נמצא מחיר שירות עצמי")
+                        
+                        temp_scraper.save_to_text_file(fuel_data, self_service_price)
+                        temp_scraper.save_to_database(fuel_data, self_service_price)
                         display_results(fuel_data)
                         update_status("התהליך הושלם בהצלחה")
                         # הצגת הודעת הצלחה
                         from tkinter import messagebox
                         messagebox.showinfo("הצלחה", f"נתונים אמיתיים נשמרו בהצלחה!\nנמצאו {len(fuel_data)} מוצרים\nנשמרו קבצים: טקסט ובסיס נתונים")
                     else:
-                        print("❌ לא נמצאו נתונים אמיתיים - משתמש בנתוני דוגמה")
-                        sample_data = temp_scraper.get_sample_data()
-                        temp_scraper.save_to_text_file(sample_data)
-                        temp_scraper.save_to_database(sample_data)
-                        display_results(sample_data)
-                        update_status("הוצגו נתונים לדוגמה")
+                        print("לא נמצאו נתונים אמיתיים")
+                        update_status("לא נמצאו נתונים אמיתיים")
                         # הצגת הודעת אזהרה
                         from tkinter import messagebox
-                        messagebox.showwarning("אזהרה", "לא נמצאו נתונים באתר.\nהוצגו נתונים לדוגמה.\nנשמרו קבצים: טקסט ובסיס נתונים")
+                        messagebox.showwarning("אזהרה", "לא נמצאו נתונים באתר.")
                     
                 except Exception as e:
                     update_status(f"שגיאה: {str(e)}")

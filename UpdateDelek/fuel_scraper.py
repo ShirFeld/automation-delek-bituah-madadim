@@ -273,6 +273,63 @@ class ModernFuelScraper:
             except:
                 pass
             self.driver = None
+    
+    def scrape_self_service_price(self, month, year):
+        """שליפת מחיר שירות עצמי מאתר delekulator"""
+        try:
+            # הגדרת דפדפן אם עדיין לא הוגדר
+            driver_was_none = self.driver is None
+            if driver_was_none:
+                if not self.setup_driver():
+                    print("שגיאה בהגדרת דפדפן לשליפת שירות עצמי")
+                    return None
+            
+            print(f"שולף מחיר שירות עצמי לחודש {month}/{year}...")
+            
+            # גלישה לאתר delekulator
+            url = "https://delekulator.co.il/היסטוריית-מחירי-הדלק/"
+            self.driver.get(url)
+            
+            # המתנה לטעינת העמוד
+            time.sleep(3)
+            
+            # קבלת תוכן העמוד
+            page_source = self.driver.page_source
+            soup = BeautifulSoup(page_source, 'html.parser')
+            
+            # חיפוש השורה "שירות עצמי: YYYY/MM - X.XX ₪"
+            # נחפש את הפורמט הספציפי
+            search_pattern = f"שירות עצמי: {year}/{month:02d}"
+            print(f"מחפש את הדפוס: '{search_pattern}'")
+            
+            # חיפוש בכל הטקסט
+            text_content = soup.get_text()
+            
+            # חיפוש השורה המתאימה
+            for line in text_content.split('\n'):
+                line = line.strip()
+                if search_pattern in line:
+                    print(f"נמצאה שורה: {line}")
+                    # פרסור: "שירות עצמי: 2025/10 – 7.29 ₪"
+                    # נחפש את המספר אחרי המקף
+                    import re
+                    # חיפוש מספר עשרוני אחרי המקף (כולל סוגים שונים של מקפים)
+                    match = re.search(r'[-–—]\s*(\d+\.\d+)', line)
+                    if match:
+                        price = float(match.group(1))
+                        print(f"נמצא מחיר שירות עצמי: {price}")
+                        return price
+            
+            print(f"לא נמצא מחיר שירות עצמי עבור {month}/{year}")
+            return None
+            
+        except Exception as e:
+            print(f"שגיאה בשליפת מחיר שירות עצמי: {str(e)}")
+            return None
+        finally:
+            # אם יצרנו דפדפן חדש, נסגור אותו
+            if driver_was_none and self.driver:
+                self.close_driver()
         
     def start_scraping(self):
         """התחלת תהליך השליפה בחוט נפרד"""
@@ -316,9 +373,23 @@ class ModernFuelScraper:
             print(f"נתונים שנחלצו: {len(fuel_data) if fuel_data else 0}")
             if fuel_data and len(fuel_data) > 0:
                 print("נמצאו נתונים אמיתיים מהאתר - משתמש בהם")
+                
+                # שליפת מחיר שירות עצמי מאתר delekulator
+                date_from_data = fuel_data[0]['date']
+                date_parts = date_from_data.split('/')
+                month = int(date_parts[1])
+                year = int(date_parts[2])
+                
+                print("\nשולף מחיר שירות עצמי מאתר delekulator...")
+                self_service_price = self.scrape_self_service_price(month, year)
+                if self_service_price:
+                    print(f"נמצא מחיר שירות עצמי: {self_service_price}")
+                else:
+                    print("לא נמצא מחיר שירות עצמי")
+                
                 self.save_data(fuel_data)
-                self.save_to_text_file(fuel_data)  # שמירה לקובץ טקסט
-                self.save_to_database(fuel_data)   # שמירה לבסיס נתונים
+                self.save_to_text_file(fuel_data, self_service_price)  # שמירה לקובץ טקסט
+                self.save_to_database(fuel_data, self_service_price)   # שמירה לבסיס נתונים
                 self.display_results(fuel_data)
                 self.update_status("התהליך הושלם בהצלחה")
                 messagebox.showinfo("הצלחה", f"נתונים אמיתיים נשמרו בהצלחה!\nנמצאו {len(fuel_data)} מוצרים\nנשמרו קבצים: טקסט ובסיס נתונים")
@@ -519,7 +590,7 @@ class ModernFuelScraper:
         # לא נוצר יותר קובץ JSON
         pass
     
-    def save_to_text_file(self, fuel_data):
+    def save_to_text_file(self, fuel_data, self_service_price=None):
         """שמירת נתונים לקובץ טקסט"""
         try:
             if not fuel_data:
@@ -557,6 +628,14 @@ class ModernFuelScraper:
                     f.write(f"תאריך: {item['date']}\n")
                     f.write("-" * 30 + "\n")
                 
+                # הוספת מחיר שירות עצמי אם זמין
+                if self_service_price:
+                    f.write(f"\nמוצר: בנזין 95 - שירות עצמי\n")
+                    f.write(f"מחיר: {self_service_price:.2f} ₪\n")
+                    f.write(f"תאריך: {date_from_data}\n")
+                    f.write(f"מקור: delekulator.co.il\n")
+                    f.write("-" * 30 + "\n")
+                
                 f.write(f"\nקובץ נוצר: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
             
             print(f"קובץ טקסט נשמר: {full_path}")
@@ -564,7 +643,7 @@ class ModernFuelScraper:
         except Exception as e:
             print(f"שגיאה בשמירת קובץ טקסט: {str(e)}")
     
-    def save_to_database(self, fuel_data):
+    def save_to_database(self, fuel_data, self_service_price=None):
         """יצירת בסיס נתונים SQLite ושמירת נתונים"""
         try:
             if not fuel_data:
@@ -598,7 +677,7 @@ class ModernFuelScraper:
                 'Benzin95': 0,  # יעודכן אם נמצא
                 'Soler': 0,     # יעודכן אם נמצא
                 'Neft': 0,      # יעודכן אם נמצא
-                'SAtzmi95': 0,  # יעודכן אם נמצא (זהה ל-Benzin95)
+                'SAtzmi95': self_service_price if self_service_price else 0,  # מחיר שירות עצמי
                 'SAtzmi96': 0
             }
             
@@ -619,7 +698,6 @@ class ModernFuelScraper:
                     print(f"הוכנס ל-Benzin98: {price}")
                 elif 'בנע 95' in fuel_type_clean or 'בנ"ע 95' in fuel_type_clean:
                     data_mapping['Benzin95'] = price
-                    data_mapping['SAtzmi95'] = price  # זהה ל-Benzin95
                     print(f"הוכנס ל-Benzin95: {price}")
                 elif 'סולר-תחבורה' in fuel_type_clean or 'סולר תחבורה' in fuel_type_clean:
                     data_mapping['Soler'] = price
