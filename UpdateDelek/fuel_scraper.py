@@ -24,6 +24,16 @@ try:
 except ImportError:
     HAS_WIN32COM = False
 
+# הוספת Selenium
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+
 class ModernFuelScraper:
     def __init__(self):
         self.root = tk.Tk()
@@ -34,6 +44,7 @@ class ModernFuelScraper:
             "נפט",
             "סולר-תחבורה"
         ]
+        self.driver = None
         
     def setup_modern_ui(self):
         """הגדרת ממשק משתמש מודרני בסגנון Windows 11"""
@@ -227,37 +238,84 @@ class ModernFuelScraper:
         # הפונקציה הזו לא בשימוש יותר אבל נשאיר אותה למקרה הצורך
         pass
         
+    def setup_driver(self):
+        """הגדרת דפדפן Selenium"""
+        try:
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')  # דפדפן בלתי נראה
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            # User agent אמיתי
+            chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+            
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+            # הסרת זיהוי webdriver
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            return True
+        except Exception as e:
+            print(f"שגיאה בהגדרת דפדפן: {str(e)}")
+            return False
+    
+    def close_driver(self):
+        """סגירת הדפדפן"""
+        if self.driver:
+            try:
+                self.driver.quit()
+            except:
+                pass
+            self.driver = None
+        
     def start_scraping(self):
         """התחלת תהליך השליפה בחוט נפרד"""
         self.start_button.config(state='disabled', text="מעבד...")
         threading.Thread(target=self.scrape_fuel_prices, daemon=True).start()
         
     def scrape_fuel_prices(self):
-        """שליפת מחירי דלק מאתר פז"""
+        """שליפת מחירי דלק מאתר פז באמצעות Selenium"""
         try:
+            self.update_status("מכין דפדפן...")
+            
+            # הגדרת דפדפן
+            if not self.setup_driver():
+                raise Exception("לא הצלחתי להגדיר דפדפן")
+            
             self.update_status("מתחבר לאתר פז...")
             
-            # כותרות HTTP לסימולציה של דפדפן
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            
-            # שליפת העמוד
+            # גלישה לאתר
             url = "https://www.paz.co.il/price-lists"
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
+            self.driver.get(url)
+            
+            # המתנה לטעינת העמוד
+            print("ממתין לטעינת העמוד...")
+            time.sleep(5)  # המתנה לטעינה מלאה
+            
+            # בדיקה אם יש CAPTCHA
+            page_source = self.driver.page_source
+            if "Radware" in page_source or "captcha" in page_source.lower():
+                print("זוהה CAPTCHA - ממתין עוד קצת...")
+                time.sleep(10)  # המתנה נוספת
+                page_source = self.driver.page_source
             
             self.update_status("מנתח נתונים...")
             
             # ניתוח HTML
-            soup = BeautifulSoup(response.content, 'html.parser')
+            soup = BeautifulSoup(page_source, 'html.parser')
             
             # חיפוש טבלת "דלקים בתחנות"
             fuel_data = self.extract_fuel_data(soup)
             
             print(f"נתונים שנחלצו: {len(fuel_data) if fuel_data else 0}")
             if fuel_data and len(fuel_data) > 0:
-                print("✅ נמצאו נתונים אמיתיים מהאתר - משתמש בהם")
+                print("נמצאו נתונים אמיתיים מהאתר - משתמש בהם")
                 self.save_data(fuel_data)
                 self.save_to_text_file(fuel_data)  # שמירה לקובץ טקסט
                 self.save_to_database(fuel_data)   # שמירה לבסיס נתונים
@@ -265,20 +323,17 @@ class ModernFuelScraper:
                 self.update_status("התהליך הושלם בהצלחה")
                 messagebox.showinfo("הצלחה", f"נתונים אמיתיים נשמרו בהצלחה!\nנמצאו {len(fuel_data)} מוצרים\nנשמרו קבצים: טקסט ובסיס נתונים")
             else:
-                print("❌ לא נמצאו נתונים אמיתיים - משתמש בנתוני דוגמה")
-                sample_data = self.get_sample_data()
-                self.save_data(sample_data)
-                self.save_to_text_file(sample_data)  # שמירה לקובץ טקסט
-                self.save_to_database(sample_data)   # שמירה לבסיס נתונים
-                self.display_results(sample_data)
-                self.update_status("הוצגו נתונים לדוגמה")
+                print("לא נמצאו נתונים אמיתיים ")
+                self.update_status("לא נמצאו נתונים אמיתיים")
                 messagebox.showwarning("אזהרה", "לא נמצאו נתונים באתר.\nהוצגו נתונים לדוגמה.\nנשמרו קבצים: טקסט ובסיס נתונים")
                 
         except Exception as e:
             self.update_status("אירעה שגיאה")
+            print(f"שגיאה: {str(e)}")
             messagebox.showerror("שגיאה", f"אירעה שגיאה:\n{str(e)}")
             
         finally:
+            self.close_driver()
             self.start_button.config(state='normal', text="התחל שליפת נתונים")
             
     def extract_fuel_data(self, soup):
@@ -287,7 +342,7 @@ class ModernFuelScraper:
         
         try:
             # חיפוש הכותרת "דלקים בתחנות"
-            headers = soup.find_all(text=lambda text: text and "דלקים בתחנות" in text)
+            headers = soup.find_all(string=lambda text: text and "דלקים בתחנות" in text)
             
             if not headers:
                 self.log_message("לא נמצאה כותרת 'דלקים בתחנות'")
@@ -392,7 +447,7 @@ class ModernFuelScraper:
                                 'date': valid_date
                             })
                             
-                            print(f"✅ נוסף: {fuel_type} - {price} - {valid_date}")
+                            print(f"נוסף: {fuel_type} - {price} - {valid_date}")
                             
                         except ValueError as e:
                             print(f"שגיאה בפרסור מחיר '{price_text}': {e}")
@@ -407,31 +462,49 @@ class ModernFuelScraper:
         """ניקוי טקסט מתווים מיותרים"""
         if not text:
             return ""
-        return text.strip().replace('"', '').replace("'", "").replace('\u05F4', '').replace('\u05F3', '')
+        # הסרת כל סוגי הגרשיים והגרשיים הכפולים
+        cleaned = text.strip()
+        cleaned = cleaned.replace('"', '').replace("'", "")
+        cleaned = cleaned.replace('\u05F4', '').replace('\u05F3', '')  # גרשיים עבריים
+        cleaned = cleaned.replace('\u201C', '').replace('\u201D', '')  # גרשיים כפולים
+        cleaned = cleaned.replace('\u2018', '').replace('\u2019', '')  # גרשיים בודדים
+        cleaned = cleaned.replace('״', '').replace('׳', '')  # עוד גרשיים עבריים
+        return cleaned
         
     def is_target_fuel(self, fuel_type):
         """בדיקה אם זה סוג דלק רצוי"""
         if not fuel_type:
             return False
             
-        fuel_normalized = self.clean_text(fuel_type).replace(" ", "").lower()
+        fuel_normalized = self.clean_text(fuel_type).replace(" ", "").replace("-", "").lower()
         
         # בדיקות ספציפיות לכל סוג דלק
-        target_patterns = [
-            ('בנזין95', ['בנ"ע95', 'בנזין95', '95בנ"ע', '95בנזין']),
-            ('בנזיןסופר98', ['בנ"עסופר98', 'בנזיןסופר98', '98בנ"עסופר', '98בנזיןסופר', 'סופר98']),
-            ('נפט', ['נפט']),
-            ('סולר-תחבורה', ['סולר-תחבורה', 'סולרתחבורה', 'סולר'])
-        ]
+        # נבדוק אם המילים המרכזיות מופיעות בטקסט
         
-        for fuel_key, patterns in target_patterns:
-            for pattern in patterns:
-                pattern_clean = pattern.replace('"', '').replace("'", "").lower()
-                if pattern_clean in fuel_normalized:
-                    print(f"🎯 זוהה דלק: '{fuel_type}' -> {fuel_key}")
-                    return True
+        # בנזין 95
+        if ('95' in fuel_normalized and 
+            ('בנ' in fuel_normalized or 'בנזין' in fuel_normalized) and
+            'סופר' not in fuel_normalized):
+            print(f"זוהה דלק: '{fuel_type}' -> בנזין 95")
+            return True
         
-        print(f"❌ לא זוהה: '{fuel_type}' (נורמליזציה: '{fuel_normalized}')")
+        # בנזין סופר 98
+        if ('98' in fuel_normalized or 'סופר' in fuel_normalized) and \
+           ('בנ' in fuel_normalized or 'בנזין' in fuel_normalized or 'סופר' in fuel_normalized):
+            print(f"זוהה דלק: '{fuel_type}' -> בנזין סופר 98")
+            return True
+        
+        # נפט
+        if 'נפט' in fuel_normalized:
+            print(f"זוהה דלק: '{fuel_type}' -> נפט")
+            return True
+        
+        # סולר תחבורה
+        if 'סולר' in fuel_normalized and ('תחבורה' in fuel_normalized or fuel_normalized == 'סולר'):
+            print(f"זוהה דלק: '{fuel_type}' -> סולר-תחבורה")
+            return True
+        
+        print(f"לא זוהה: '{fuel_type}' (נורמליזציה: '{fuel_normalized}')")
         return False
         
     def is_valid_date(self, date_text):
@@ -440,15 +513,6 @@ class ModernFuelScraper:
             return False
         return '/' in date_text and date_text.count('/') == 2
         
-    def get_sample_data(self):
-        """נתונים לדוגמה - מעודכן עם המחירים האמיתיים"""
-        current_date = datetime.now().strftime("%d/%m/%Y")
-        return [
-            {'fuel_type': 'בנע 95', 'price': 7.31, 'date': current_date},
-            {'fuel_type': 'בנע סופר 98', 'price': 9.44, 'date': current_date},
-            {'fuel_type': 'נפט', 'price': 13.77, 'date': current_date},
-            {'fuel_type': 'סולר-תחבורה', 'price': 17.16, 'date': current_date}
-        ]
         
     def save_data(self, fuel_data):
         """שמירת נתונים לקובץ JSON (בוטל)"""
@@ -548,23 +612,23 @@ class ModernFuelScraper:
                 # מיפוי מדויק לפי שמות הדלקים מהאתר
                 fuel_type_clean = fuel_type.strip()
                 
-                print(f"🔍 בודק מיפוי עבור: '{fuel_type_clean}'")
+                print(f"בודק מיפוי עבור: '{fuel_type_clean}'")
                 
                 if 'בנע סופר 98' in fuel_type_clean or 'בנ"ע סופר 98' in fuel_type_clean:
                     data_mapping['Benzin98'] = price
-                    print(f"✅ הוכנס ל-Benzin98: {price}")
+                    print(f"הוכנס ל-Benzin98: {price}")
                 elif 'בנע 95' in fuel_type_clean or 'בנ"ע 95' in fuel_type_clean:
                     data_mapping['Benzin95'] = price
                     data_mapping['SAtzmi95'] = price  # זהה ל-Benzin95
-                    print(f"✅ הוכנס ל-Benzin95: {price}")
+                    print(f"הוכנס ל-Benzin95: {price}")
                 elif 'סולר-תחבורה' in fuel_type_clean or 'סולר תחבורה' in fuel_type_clean:
                     data_mapping['Soler'] = price
-                    print(f"✅ הוכנס ל-Soler: {price}")
+                    print(f"הוכנס ל-Soler: {price}")
                 elif 'נפט' in fuel_type_clean:
                     data_mapping['Neft'] = price
-                    print(f"✅ הוכנס ל-Neft: {price}")
+                    print(f"הוכנס ל-Neft: {price}")
                 else:
-                    print(f"❌ לא נמצא מיפוי עבור: '{fuel_type_clean}'")
+                    print(f"לא נמצא מיפוי עבור: '{fuel_type_clean}'")
             
             # הדפסת סיכום המיפוי
             print("\n=== סיכום נתונים לשמירה ===")
@@ -583,15 +647,15 @@ class ModernFuelScraper:
             if HAS_WIN32COM:
                 try:
                     self.create_real_access_db(data_mapping, db_file)
-                    print(f"✅ נוצר קובץ Access 2000 אמיתי: {db_file}")
+                    print(f"נוצר קובץ Access 2000 אמיתי: {db_file}")
                 except Exception as e:
-                    print(f"❌ לא הצלחתי ליצור Access 2000: {str(e)}")
+                    print(f"לא הצלחתי ליצור Access 2000: {str(e)}")
                     return
             else:
-                print("❌ win32com לא זמין - לא ניתן ליצור Access 2000")
+                print("win32com לא זמין - לא ניתן ליצור Access 2000")
                 return
             
-            print(f"✅ נתונים נשמרו בבסיס נתונים Access 2000: {db_file}")
+            print(f"נתונים נשמרו בבסיס נתונים Access 2000: {db_file}")
             
         except Exception as e:
             print(f"שגיאה בשמירת בסיס נתונים: {str(e)}")

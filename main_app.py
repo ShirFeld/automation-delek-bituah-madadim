@@ -171,6 +171,7 @@ class MainApplication:
         from bs4 import BeautifulSoup
         import threading
         from datetime import datetime
+        import time
         
         # יצירת instance של תוכנת הדלק
         fuel_scraper = ModernFuelScraper()
@@ -328,9 +329,10 @@ class MainApplication:
         # פונקציה לשליפת הנתונים
         def start_scraping():
             start_button.config(state='disabled', text="מעבד...")
-            update_status("מתחבר לאתר פז...")
+            update_status("מכין דפדפן...")
             
             def scrape_task():
+                temp_scraper = None
                 try:
                     # יצירת instance חדש של המחלץ ושימוש בפונקציות שלו
                     temp_scraper = ModernFuelScraper()
@@ -339,23 +341,33 @@ class MainApplication:
                     # הגדרת פונקציות עדכון סטטוס
                     temp_scraper.update_status = update_status
                     
+                    # הגדרת דפדפן
+                    update_status("מכין דפדפן...")
+                    if not temp_scraper.setup_driver():
+                        raise Exception("לא הצלחתי להגדיר דפדפן")
+                    
                     # ביצוע השליפה
                     update_status("מתחבר לאתר פז...")
                     
-                    # כותרות HTTP
-                    headers = {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                    }
-                    
-                    # שליפת העמוד
+                    # גלישה לאתר
                     url = "https://www.paz.co.il/price-lists"
-                    response = requests.get(url, headers=headers, timeout=10)
-                    response.raise_for_status()
+                    temp_scraper.driver.get(url)
+                    
+                    # המתנה לטעינת העמוד
+                    print("ממתין לטעינת העמוד...")
+                    time.sleep(5)
+                    
+                    # בדיקה אם יש CAPTCHA
+                    page_source = temp_scraper.driver.page_source
+                    if "Radware" in page_source or "captcha" in page_source.lower():
+                        print("⚠️ זוהה CAPTCHA - ממתין עוד קצת...")
+                        time.sleep(10)
+                        page_source = temp_scraper.driver.page_source
                     
                     update_status("מנתח נתונים...")
                     
                     # ניתוח HTML
-                    soup = BeautifulSoup(response.content, 'html.parser')
+                    soup = BeautifulSoup(page_source, 'html.parser')
                     
                     # חיפוש טבלת "דלקים בתחנות"
                     fuel_data = temp_scraper.extract_fuel_data(soup)
@@ -388,6 +400,9 @@ class MainApplication:
                     messagebox.showerror("שגיאה", f"אירעה שגיאה:\n{str(e)}")
                     
                 finally:
+                    # סגירת הדפדפן
+                    if temp_scraper and temp_scraper.driver:
+                        temp_scraper.close_driver()
                     start_button.config(state='normal', text="התחל שליפת נתונים")
             
             # הרצה בחוט נפרד
