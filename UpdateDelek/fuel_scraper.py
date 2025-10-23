@@ -18,6 +18,7 @@ from datetime import datetime
 import os
 import sys
 import sqlite3
+import config
 try:
     import win32com.client
     HAS_WIN32COM = True
@@ -230,8 +231,13 @@ class ModernFuelScraper:
         
     def update_status(self, message):
         """עדכון הודעת סטטוס"""
-        self.status_label.config(text=message)
-        self.root.update()
+        try:
+            if hasattr(self, 'status_label') and self.status_label.winfo_exists():
+                self.status_label.config(text=message)
+            if hasattr(self, 'root') and self.root.winfo_exists():
+                self.root.update()
+        except:
+            pass  # האלמנטים כבר לא קיימים
         
     def log_message(self, message):
         """הוספת הודעה לאזור התוצאות (לא בשימוש יותר - מוחלף בטבלה)"""
@@ -286,8 +292,8 @@ class ModernFuelScraper:
             
             print(f"שולף מחיר שירות עצמי לחודש {month}/{year}...")
             
-            # גלישה לאתר delekulator
-            url = "https://delekulator.co.il/היסטוריית-מחירי-הדלק/"
+            # גלישה לאתר delekulator - משתמש בURL מקובץ הקונפיג
+            url = config.DELEKULATOR_URL
             self.driver.get(url)
             
             # המתנה לטעינת העמוד
@@ -347,8 +353,8 @@ class ModernFuelScraper:
             
             self.update_status("מתחבר לאתר פז...")
             
-            # גלישה לאתר
-            url = "https://www.paz.co.il/price-lists"
+            # גלישה לאתר - משתמש בURL מקובץ הקונפיג
+            url = config.PAZ_URL
             self.driver.get(url)
             
             # המתנה לטעינת העמוד
@@ -392,20 +398,34 @@ class ModernFuelScraper:
                 self.save_to_database(fuel_data, self_service_price)   # שמירה לבסיס נתונים
                 self.display_results(fuel_data)
                 self.update_status("התהליך הושלם בהצלחה")
-                messagebox.showinfo("הצלחה", f"נתונים אמיתיים נשמרו בהצלחה!\nנמצאו {len(fuel_data)} מוצרים\nנשמרו קבצים: טקסט ובסיס נתונים")
+                try:
+                    messagebox.showinfo("הצלחה", f"נתונים אמיתיים נשמרו בהצלחה!\nנמצאו {len(fuel_data)} מוצרים\nנשמרו קבצים: טקסט ובסיס נתונים")
+                except:
+                    print("הצלחה: נתונים אמיתיים נשמרו בהצלחה!")
             else:
                 print("לא נמצאו נתונים אמיתיים ")
                 self.update_status("לא נמצאו נתונים אמיתיים")
-                messagebox.showwarning("אזהרה", "לא נמצאו נתונים באתר.\nהוצגו נתונים לדוגמה.\nנשמרו קבצים: טקסט ובסיס נתונים")
+                try:
+                    messagebox.showwarning("אזהרה", "לא נמצאו נתונים באתר.\nהוצגו נתונים לדוגמה.\nנשמרו קבצים: טקסט ובסיס נתונים")
+                except:
+                    print("אזהרה: לא נמצאו נתונים באתר")
                 
         except Exception as e:
             self.update_status("אירעה שגיאה")
             print(f"שגיאה: {str(e)}")
-            messagebox.showerror("שגיאה", f"אירעה שגיאה:\n{str(e)}")
+            try:
+                messagebox.showerror("שגיאה", f"אירעה שגיאה:\n{str(e)}")
+            except:
+                print(f"שגיאה: {str(e)}")
             
         finally:
             self.close_driver()
-            self.start_button.config(state='normal', text="התחל שליפת נתונים")
+            # בדיקה אם הכפתור עדיין קיים (לא נהרס)
+            try:
+                if self.start_button.winfo_exists():
+                    self.start_button.config(state='normal', text="התחל שליפת נתונים")
+            except:
+                pass  # הכפתור כבר לא קיים
             
     def extract_fuel_data(self, soup):
         """חילוץ נתוני דלק מה-HTML"""
@@ -561,7 +581,7 @@ class ModernFuelScraper:
         
         # בנזין סופר 98
         if ('98' in fuel_normalized or 'סופר' in fuel_normalized) and \
-           ('בנ' in fuel_normalized or 'בנזין' in fuel_normalized or 'סופר' in fuel_normalized):
+        ('בנ' in fuel_normalized or 'בנזין' in fuel_normalized or 'סופר' in fuel_normalized):
             print(f"זוהה דלק: '{fuel_type}' -> בנזין סופר 98")
             return True
         
@@ -601,8 +621,8 @@ class ModernFuelScraper:
             # המרת התאריך לפורמט שם קובץ (dd-mm-yyyy)
             date_for_filename = date_from_data.replace('/', '-')
             
-            # יצירת הנתיב המלא
-            base_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\DELEK"
+            # יצירת הנתיב המלא מקובץ הקונפיג
+            base_path = config.DELEK_OUTPUT_PATH
             
             # יצירת התיקייה אם היא לא קיימת
             if not os.path.exists(base_path):
@@ -649,8 +669,8 @@ class ModernFuelScraper:
             if not fuel_data:
                 return
                 
-            # נתיב ושם קובץ בסיס הנתונים
-            base_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\DELEK"
+            # נתיב ושם קובץ בסיס הנתונים מקובץ הקונפיג
+            base_path = config.DELEK_OUTPUT_PATH
             
             # יצירת שם קובץ עם התאריך (חודש ושנה)
             date_from_data = fuel_data[0]['date']  # פורמט: dd/mm/yyyy
@@ -799,17 +819,22 @@ class ModernFuelScraper:
             
     def display_results(self, fuel_data):
         """הצגת תוצאות בטבלה יפה"""
-        # נקה את הטבלה
-        for item in self.result_table.get_children():
-            self.result_table.delete(item)
-        
-        # הוסף את התוצאות לטבלה (בסדר הנכון: תאריך, מחיר, מוצר)
-        for item in fuel_data:
-            self.result_table.insert('', 'end', values=(
-                item['date'],
-                f"{item['price']:.2f}",
-                item['fuel_type']
-            ))
+        try:
+            # בדיקה אם הטבלה עדיין קיימת
+            if hasattr(self, 'result_table') and self.result_table.winfo_exists():
+                # נקה את הטבלה
+                for item in self.result_table.get_children():
+                    self.result_table.delete(item)
+                
+                # הוסף את התוצאות לטבלה (בסדר הנכון: תאריך, מחיר, מוצר)
+                for item in fuel_data:
+                    self.result_table.insert('', 'end', values=(
+                        item['date'],
+                        f"{item['price']:.2f}",
+                        item['fuel_type']
+                    ))
+        except:
+            pass  # הטבלה כבר לא קיימת
             
     def run(self):
         """הפעלת האפליקציה"""
