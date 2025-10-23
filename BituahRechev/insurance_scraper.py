@@ -13,6 +13,9 @@ from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import config
 
 class InsuranceScraper:
     def __init__(self):
@@ -47,10 +50,125 @@ class InsuranceScraper:
 
     def scrape_special_vehicle_data(self):
         return self._scrape_special()
+    
+    def scrape_all_insurance_data(self, update_callback=None, display_callback=None):
+        """
+        פונקציה מקיפה שמבצעת את כל תהליך השליפה והשמירה
+        דומה ל-scrape_fuel_prices ב-fuel_scraper
+        """
+        results = {
+            'private_success': 0,
+            'commercial_success': 0,
+            'special_success': 0,
+            'total_success': 0,
+            'image_path': None,
+            'mdb_path': None
+        }
+        
+        try:
+            if update_callback:
+                update_callback("מתחיל שליפה מלאה...")
+            
+            if display_callback:
+                display_callback("🚀 שליפה מלאה - כל התרחישים!")
+                display_callback("🚗 רכב פרטי: 24 תרחישים")
+                display_callback("🚛 רכב מסחרי: 10 תרחישים")
+                display_callback("🚗 רכב מיוחד: 3 תרחישים")
+                display_callback("🎯 סך הכל: 37 תרחישים\n")
+            
+            if not self.driver:
+                if display_callback:
+                    display_callback("❌ שגיאה בדפדפן")
+                return results
+            
+            if display_callback:
+                display_callback("✅ דפדפן מוכן")
+            
+            # רכב פרטי
+            if display_callback:
+                display_callback("\n🚗 מתחיל רכב פרטי...")
+            if update_callback:
+                update_callback("שליפת רכב פרטי...")
+            
+            private_results = self.scrape_all_age_groups_complete()
+            if private_results:
+                results['private_success'] = sum(len([p for p in group.values() if p]) for group in private_results.values() if group)
+            if display_callback:
+                display_callback(f"✅ רכב פרטי: {results['private_success']}/24")
+            
+            # רכב מסחרי
+            if display_callback:
+                display_callback("\n🚛 מתחיל רכב מסחרי...")
+            if update_callback:
+                update_callback("שליפת רכב מסחרי...")
+            
+            commercial_results = self.scrape_commercial_vehicle_complete()
+            if commercial_results:
+                results['commercial_success'] = sum(sum(1 for price in group.values() if price) for group in commercial_results.values() if group)
+            if display_callback:
+                display_callback(f"✅ רכב מסחרי: {results['commercial_success']}/10")
+            
+            # רכב מיוחד
+            if display_callback:
+                display_callback("\n🚗 מתחיל רכב מיוחד...")
+            if update_callback:
+                update_callback("שליפת רכב מיוחד...")
+            
+            special_results = self.scrape_special_vehicle_data()
+            if special_results:
+                results['special_success'] = sum(1 for price in special_results.values() if price)
+            if display_callback:
+                display_callback(f"✅ רכב מיוחד: {results['special_success']}/3")
+            
+            results['total_success'] = results['private_success'] + results['commercial_success'] + results['special_success']
+            
+            if display_callback:
+                display_callback(f"\n🏆 סיכום: {results['total_success']}/37 תרחישים")
+            
+            # איחוד נתונים
+            insurance_data = {
+                'private_car': private_results,
+                'commercial_car': commercial_results,
+                'special_vehicle': special_results
+            }
+            
+            # שמירת תמונה
+            if display_callback:
+                display_callback("📊 יוצר טבלאות...")
+            results['image_path'] = self.save_tables_as_image(insurance_data)
+            if results['image_path'] and display_callback:
+                display_callback(f"📷 טבלאות נשמרו: {results['image_path']}")
+            
+            # שמירת MDB
+            if display_callback:
+                display_callback("\n📊 יוצר קובץ MDB...")
+            if update_callback:
+                update_callback("יוצר קובץ MDB...")
+            
+            results['mdb_path'] = self.create_mdb_database(insurance_data)
+            if results['mdb_path'] and display_callback:
+                display_callback(f"✅ קובץ MDB נוצר: {results['mdb_path']}")
+                display_callback("📋 הקובץ כולל 3 טבלאות:")
+                display_callback("• tblBituachHova_edit (1 שורה)")
+                display_callback("• tblBituachHovaMishari_edit (5 שורות)")
+                display_callback("• tblBituachHovaPrati_edit (6 שורות)")
+            elif display_callback:
+                display_callback("⚠️ יצירת MDB נכשלה")
+            
+            if update_callback:
+                update_callback(f"הושלם: {results['total_success']}/37 + MDB")
+            
+        except Exception as e:
+            print(f"שגיאה בשליפה מקיפה: {e}")
+            if display_callback:
+                display_callback(f"❌ שגיאה: {str(e)}")
+        
+        return results
 
     # navigation helpers
     def _goto(self):
-            url = "https://car.cma.gov.il/Parameters/Get?next_page=2&curr_page=1&playAnimation=true&fontSize=12"
+            # משתמש ב-URL מקובץ הקונפיג
+            url = config.MINISTRY_OF_TRANSPORT_URL
             self.driver.get(url)
             time.sleep(2)
 
@@ -80,7 +198,7 @@ class InsuranceScraper:
                             price = float(txt)
                             print(f"💰 מצא מחיר הראל: {price} ₪")
                             return price
-            except Exception as e:
+                except Exception as e:
                     print(f"⚠️ שגיאה בעיבוד שורת הראל: {e}")
                     continue
             
@@ -107,7 +225,7 @@ class InsuranceScraper:
             
             time.sleep(1)  # המתנה קצרה לאחר מילוי
             print(f"✅ מילא שדות: גיל={age}, רישיון={lic}")
-            except Exception as e:
+        except Exception as e:
             print(f"⚠️ שגיאה במילוי שדות: {e}")
 
     # private cars
@@ -224,17 +342,17 @@ class InsuranceScraper:
             from simple_mdb_creator import prepare_all_tables_data
             import matplotlib.pyplot as plt
             
-            # אם לא סופק נתיב, נשתמש בנתיב הנכון
+            # אם לא סופק נתיב, נשתמש בנתיב מקובץ הקונפיג
             if save_path is None:
-                save_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev"
+                save_path = config.BITUAH_RECHEV_OUTPUT_PATH
             
             # יצירת התיקיות אם לא קיימות
             try:
                 os.makedirs(save_path, exist_ok=True)
-                print(f"✅ תיקייה מוכנה: {save_path}")
+                print(f"תיקייה מוכנה: {save_path}")
             except Exception as e:
-                print(f"❌ שגיאה ביצירת תיקייה: {e}")
-            return None
+                print(f"שגיאה ביצירת תיקייה: {e}")
+                return None
             next_month = (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1)
             image_path = os.path.join(save_path, f"{next_month.strftime('%m%y')}.jpg")
             
@@ -256,7 +374,7 @@ class InsuranceScraper:
                 if len(data['rows']) > 0:
                     table = ax.table(cellText=data['rows'], colLabels=data['headers'], cellLoc='center', loc='center')
                     table.auto_set_font_size(False); table.set_fontsize(9); table.scale(1, 2)
-                    else:
+                else:
                     # אם אין נתונים, נציג הודעה
                     ax.text(0.5, 0.5, 'אין נתונים', ha='center', va='center', fontsize=14)
                 ax.set_xlim(ax.get_xlim()[::-1]); ax.axis('off')
@@ -271,9 +389,9 @@ class InsuranceScraper:
         try:
             from simple_mdb_creator import create_insurance_files
             
-            # אם לא סופק נתיב, נשתמש בנתיב הנכון
+            # אם לא סופק נתיב, נשתמש בנתיב מקובץ הקונפיג
             if save_path is None:
-                save_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev"
+                save_path = config.BITUAH_RECHEV_OUTPUT_PATH
             
             return create_insurance_files(save_path, insurance_data)
         except Exception as e:

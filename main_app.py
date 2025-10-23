@@ -5,11 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 import sys
 import os
-import datetime
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
+import config
 
 # ייבוא התוכנה הקיימת לדלק
 from UpdateDelek.fuel_scraper import ModernFuelScraper
@@ -167,11 +163,8 @@ class MainApplication:
         
     def create_embedded_fuel_interface(self):
         """יצירת ממשק הדלק המוטמע בטאב"""
-        import requests
-        from bs4 import BeautifulSoup
         import threading
         from datetime import datetime
-        import time
         
         # יצירת instance של תוכנת הדלק
         fuel_scraper = ModernFuelScraper()
@@ -329,90 +322,37 @@ class MainApplication:
         # פונקציה לשליפת הנתונים
         def start_scraping():
             start_button.config(state='disabled', text="מעבד...")
-            update_status("מכין דפדפן...")
             
             def scrape_task():
                 temp_scraper = None
                 try:
-                    # יצירת instance חדש של המחלץ ושימוש בפונקציות שלו
+                    # יצירת instance חדש של המחלץ
                     temp_scraper = ModernFuelScraper()
                     temp_scraper.root.destroy()
                     
-                    # הגדרת פונקציות עדכון סטטוס
+                    # הגדרת פונקציות עדכון סטטוס מותאמות
                     temp_scraper.update_status = update_status
                     
-                    # הגדרת דפדפן
-                    update_status("מכין דפדפן...")
-                    if not temp_scraper.setup_driver():
-                        raise Exception("לא הצלחתי להגדיר דפדפן")
+                    # שינוי פונקציית ההצגה להציג בטבלה שלנו במקום של fuel_scraper
+                    original_display = temp_scraper.display_results
+                    temp_scraper.display_results = display_results
                     
-                    # ביצוע השליפה
-                    update_status("מתחבר לאתר פז...")
+                    # קריאה לפונקציה המקורית שמבצעת את כל השליפה
+                    # זה מריץ את כל הלוגיקה מ-fuel_scraper.py
+                    temp_scraper.scrape_fuel_prices()
                     
-                    # גלישה לאתר
-                    url = "https://www.paz.co.il/price-lists"
-                    temp_scraper.driver.get(url)
-                    
-                    # המתנה לטעינת העמוד
-                    print("ממתין לטעינת העמוד...")
-                    time.sleep(5)
-                    
-                    # בדיקה אם יש CAPTCHA
-                    page_source = temp_scraper.driver.page_source
-                    if "Radware" in page_source or "captcha" in page_source.lower():
-                        print("זוהה CAPTCHA - ממתין עוד קצת...")
-                        time.sleep(10)
-                        page_source = temp_scraper.driver.page_source
-                    
-                    update_status("מנתח נתונים...")
-                    
-                    # ניתוח HTML
-                    soup = BeautifulSoup(page_source, 'html.parser')
-                    
-                    # חיפוש טבלת "דלקים בתחנות"
-                    fuel_data = temp_scraper.extract_fuel_data(soup)
-                    
-                    if fuel_data and len(fuel_data) > 0:
-                        print("נמצאו נתונים אמיתיים מהאתר - משתמש בהם")
-                        
-                        # שליפת מחיר שירות עצמי מאתר delekulator
-                        date_from_data = fuel_data[0]['date']
-                        date_parts = date_from_data.split('/')
-                        month = int(date_parts[1])
-                        year = int(date_parts[2])
-                        
-                        print("\nשולף מחיר שירות עצמי מאתר delekulator...")
-                        self_service_price = temp_scraper.scrape_self_service_price(month, year)
-                        if self_service_price:
-                            print(f"נמצא מחיר שירות עצמי: {self_service_price}")
-                        else:
-                            print("לא נמצא מחיר שירות עצמי")
-                        
-                        temp_scraper.save_to_text_file(fuel_data, self_service_price)
-                        temp_scraper.save_to_database(fuel_data, self_service_price)
-                        display_results(fuel_data)
-                        update_status("התהליך הושלם בהצלחה")
-                        # הצגת הודעת הצלחה
-                        from tkinter import messagebox
-                        messagebox.showinfo("הצלחה", f"נתונים אמיתיים נשמרו בהצלחה!\nנמצאו {len(fuel_data)} מוצרים\nנשמרו קבצים: טקסט ובסיס נתונים")
-                    else:
-                        print("לא נמצאו נתונים אמיתיים")
-                        update_status("לא נמצאו נתונים אמיתיים")
-                        # הצגת הודעת אזהרה
-                        from tkinter import messagebox
-                        messagebox.showwarning("אזהרה", "לא נמצאו נתונים באתר.")
+                    # הצגת הודעת הצלחה (רק אם לא הייתה שגיאה)
+                    update_status("התהליך הושלם בהצלחה")
+                    from tkinter import messagebox
+                    messagebox.showinfo("הצלחה", "נתוני דלק נשמרו בהצלחה!")
                     
                 except Exception as e:
                     update_status(f"שגיאה: {str(e)}")
                     print(f"שגיאה בשליפת נתונים: {str(e)}")
-                    # הצגת הודעת שגיאה
                     from tkinter import messagebox
                     messagebox.showerror("שגיאה", f"אירעה שגיאה:\n{str(e)}")
                     
                 finally:
-                    # סגירת הדפדפן
-                    if temp_scraper and temp_scraper.driver:
-                        temp_scraper.close_driver()
                     start_button.config(state='normal', text="התחל שליפת נתונים")
             
             # הרצה בחוט נפרד
@@ -627,105 +567,40 @@ class MainApplication:
         # פונקציה לשליפה משולבת עם יצירת MDB
         def start_combined_scraping():
             combined_button.config(state='disabled', text="מעבד כל התרחישים...")
-            update_status("מתחיל שליפה מלאה...")
             
             def scrape_task():
+                scraper = None
                 try:
                     import sys
                     import os
                     sys.path.append(os.path.join(os.path.dirname(__file__), 'BituahRechev'))
                     from BituahRechev.insurance_scraper import InsuranceScraper
                     
-                    display_results("🚀 שליפה מלאה - כל התרחישים!")
-                    display_results("🚗 רכב פרטי: 24 תרחישים")
-                    display_results("🚛 רכב מסחרי: 10 תרחישים")
-                    display_results("🚗 רכב מיוחד: 3 תרחישים")
-                    display_results("🎯 סך הכל: 37 תרחישים\n")
-                    
+                    # יצירת scraper
                     scraper = InsuranceScraper()
-                    if scraper.driver:
-                        display_results("✅ דפדפן מוכן")
-                        
-                        # רכב פרטי
-                        display_results("\n🚗 מתחיל רכב פרטי...")
-                        update_status("שליפת רכב פרטי...")
-                        private_results = scraper.scrape_all_age_groups_complete()
-                        private_success = 0
-                        if private_results:
-                            private_success = sum(len([p for p in group.values() if p]) for group in private_results.values() if group)
-                        display_results(f"✅ רכב פרטי: {private_success}/24")
-                        
-                        # רכב מסחרי
-                        display_results("\n🚛 מתחיל רכב מסחרי...")
-                        update_status("שליפת רכב מסחרי...")
-                        commercial_results = scraper.scrape_commercial_vehicle_complete()
-                        commercial_success = 0
-                        if commercial_results:
-                            commercial_success = sum(sum(1 for price in group.values() if price) for group in commercial_results.values() if group)
-                        display_results(f"✅ רכב מסחרי: {commercial_success}/10")
-                        
-                        # רכב מיוחד - לטבלה הראשונה
-                        display_results("\n🚗 מתחיל רכב מיוחד...")
-                        update_status("שליפת רכב מיוחד...")
-                        special_results = scraper.scrape_special_vehicle_data()
-                        special_success = 0
-                        if special_results:
-                            special_success = sum(1 for price in special_results.values() if price)
-                        display_results(f"✅ רכב מיוחד: {special_success}/3")
-                        
-                        total_success = private_success + commercial_success + special_success
-                        display_results(f"\n🏆 סיכום: {total_success}/37 תרחישים")
-                        
-                        # איחוד נתונים לכל הפלטים (אותו מקור נתונים לתמונה ול-MDB)
-                        insurance_data = {
-                            'private_car': private_results,
-                            'commercial_car': commercial_results,
-                            'special_vehicle': special_results
-                        }
-                        
-                        # Debug: הדפסת הנתונים שנאספו
-                        display_results(f"\n🔍 נתונים שנאספו:")
-                        display_results(f"📊 רכב פרטי: {private_results}")
-                        display_results(f"📊 רכב מסחרי: {commercial_results}")
-                        display_results(f"📊 רכב מיוחד: {special_results}")
-
-                        # יצירת טבלאות מהנתונים האמיתיים
-                        display_results("📊 יוצר טבלאות...")
-                        image_path = scraper.save_tables_as_image(insurance_data)
-                        if image_path:
-                            display_results(f"📷 טבלאות נשמרו: {image_path}")
-
-                        # יצירת קובץ MDB עם אותם נתונים
-                        display_results("\n📊 יוצר קובץ MDB...")
-                        update_status("יוצר קובץ MDB...")
-                        mdb_path = scraper.create_mdb_database(insurance_data)
-                        if mdb_path:
-                            display_results(f"✅ קובץ MDB נוצר: {mdb_path}")
-                            display_results("📋 הקובץ כולל 3 טבלאות:")
-                            display_results("• tblBituachHova_edit (1 שורה)")
-                            display_results("• tblBituachHovaMishari_edit (5 שורות)")
-                            display_results("• tblBituachHovaPrati_edit (6 שורות)")
-                        else:
-                            display_results("⚠️ יצירת MDB נכשלה")
-                        
-                        scraper.cleanup()
-                        update_status(f"הושלם: {total_success}/37 + MDB")
-                        
+                    
+                    # קריאה לפונקציה המקיפה שמבצעת את כל התהליך
+                    results = scraper.scrape_all_insurance_data(
+                        update_callback=update_status,
+                        display_callback=display_results
+                    )
+                    
+                    # הצגת הודעת סיכום
+                    if results['total_success'] > 0:
                         from tkinter import messagebox
                         msg = f"שליפה מלאה הושלמה!\n"
-                        msg += f"רכב פרטי: {private_success}/24\n"
-                        msg += f"רכב מסחרי: {commercial_success}/10\n"
-                        msg += f"רכב מיוחד: {special_success}/3\n"
-                        msg += f"סך הכל: {total_success}/37 תרחישים"
-                        if image_path:
-                            msg += f"\n\n📷 טבלאות: {image_path}"
-                        if mdb_path:
-                            msg += f"\n📊 MDB: {mdb_path}"
+                        msg += f"רכב פרטי: {results['private_success']}/24\n"
+                        msg += f"רכב מסחרי: {results['commercial_success']}/10\n"
+                        msg += f"רכב מיוחד: {results['special_success']}/3\n"
+                        msg += f"סך הכל: {results['total_success']}/37 תרחישים"
+                        if results['image_path']:
+                            msg += f"\n\n📷 טבלאות: {results['image_path']}"
+                        if results['mdb_path']:
+                            msg += f"\n📊 MDB: {results['mdb_path']}"
                         messagebox.showinfo("הצלחה", msg)
                     else:
-                        display_results("❌ שגיאה בדפדפן")
                         from tkinter import messagebox
-                        messagebox.showerror("שגיאה", "לא ניתן להגדיר דפדפן")
+                        messagebox.showerror("שגיאה", "לא ניתן להגדיר דפדפן או לא נמצאו נתונים")
                 
                 except Exception as e:
                     display_results(f"❌ שגיאה: {str(e)}")
@@ -733,6 +608,8 @@ class MainApplication:
                     messagebox.showerror("שגיאה", f"שגיאה: {str(e)}")
                     
                 finally:
+                    if scraper:
+                        scraper.cleanup()
                     combined_button.config(state='normal', text="🚀 שליפה מלאה - כל התרחישים (37 תרחישים)")
             
             threading.Thread(target=scrape_task, daemon=True).start()

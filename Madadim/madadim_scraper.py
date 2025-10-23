@@ -8,6 +8,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from datetime import datetime, time as dt_time
 import time
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import config
 
 class MadadimScraper:
     def __init__(self):
@@ -42,12 +45,12 @@ class MadadimScraper:
         ]
         self.current_scenario_index = 0 
         
-        # אתרי המקור
-        self.cbs_url = "https://www.cbs.gov.il/he/Statistics/Pages/%D7%9E%D7%97%D7%95%D7%9C%D7%9C%D7%99%D7%9D/%D7%9E%D7%97%D7%95%D7%9C%D7%9C-%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D.aspx"
-        self.bls_url = "https://data.bls.gov/dataViewer/view/timeseries/CUUR0000SA0"
+        # אתרי המקור - משתמש בURLים מקובץ הקונפיג
+        self.cbs_url = config.CBS_URL
+        self.bls_url = config.BLS_URL
         
-        # נתיב יעד לקבצים
-        self.target_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\Madadim"
+        # נתיב יעד לקבצים - משתמש בנתיב מקובץ הקונפיג
+        self.target_path = config.MADADIM_OUTPUT_PATH
         
         # הגדרות selenium
         self.driver = None
