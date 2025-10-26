@@ -219,21 +219,17 @@ class MadadimScraper:
             """
             self.driver.execute_script(stealth_js)
             print("OK הגנות אנטי-זיהוי מתקדמות הופעלו")
-            print("OK הגנות אנטי-זיהוי מתקדמות הופעלו")
             
             # הגדרת חלון
             self.driver.set_window_size(1936, 1048)  # גודל ספציפי שעבד
             print("OK גודל חלון הוגדר")
-            print("OK גודל חלון הוגדר")
             
             self.wait = WebDriverWait(self.driver, 20)  # זמן המתנה ארוך יותר
-            print("OK WebDriverWait הוגדר")
             print("OK WebDriverWait הוגדר")
             
             print("Chrome driver מוכן לשימוש בהצלחה!")
             
         except Exception as e:
-            print(f"ERROR שגיאה בהגדרת דפדפן: {e}")
             print(f"ERROR שגיאה בהגדרת דפדפן: {e}")
             self.driver = None
         
@@ -513,7 +509,7 @@ class MadadimScraper:
                 EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
                 )
                 price_link = price_index[2].find_element(By.CSS_SELECTOR, f"ul li a[title='{current_year}']")
-                print(f"price_link !!!!!!!!!!!!!!!!!!!!!!!!!:  {price_link}")
+                print(f"price_link:  {price_link}")
                 price_link.click()
                 time.sleep(1)
                 

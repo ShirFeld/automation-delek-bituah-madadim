@@ -7,17 +7,12 @@
 יוצר קובץ KNE בגרסת Access 2000
 """
 
-
-import requests
 from bs4 import BeautifulSoup
-import json
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
 from datetime import datetime
 import os
-import sys
-import sqlite3
 import config
 try:
     import win32com.client
@@ -25,13 +20,9 @@ try:
 except ImportError:
     HAS_WIN32COM = False
 
-# הוספת Selenium
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 
@@ -238,12 +229,7 @@ class ModernFuelScraper:
                 self.root.update()
         except:
             pass  # האלמנטים כבר לא קיימים
-        
-    def log_message(self, message):
-        """הוספת הודעה לאזור התוצאות (לא בשימוש יותר - מוחלף בטבלה)"""
-        # הפונקציה הזו לא בשימוש יותר אבל נשאיר אותה למקרה הצורך
-        pass
-        
+    
     def setup_driver(self):
         """הגדרת דפדפן Selenium"""
         try:
@@ -393,7 +379,6 @@ class ModernFuelScraper:
                 else:
                     print("לא נמצא מחיר שירות עצמי")
                 
-                self.save_data(fuel_data)
                 self.save_to_text_file(fuel_data, self_service_price)  # שמירה לקובץ טקסט
                 self.save_to_database(fuel_data, self_service_price)   # שמירה לבסיס נתונים
                 self.display_results(fuel_data)
@@ -436,10 +421,10 @@ class ModernFuelScraper:
             headers = soup.find_all(string=lambda text: text and "דלקים בתחנות" in text)
             
             if not headers:
-                self.log_message("לא נמצאה כותרת 'דלקים בתחנות'")
+                print("לא נמצאה כותרת 'דלקים בתחנות'")
                 return fuel_data
                 
-            self.log_message("נמצאה כותרת 'דלקים בתחנות'")
+            print("נמצאה כותרת 'דלקים בתחנות'")
             
             # חיפוש טבלה אחרי הכותרת
             for header in headers:
@@ -448,7 +433,7 @@ class ModernFuelScraper:
                     # חיפוש טבלה
                     table = parent.find_next('table')
                     if table:
-                        self.log_message("נמצאה טבלה")
+                        print("נמצאה טבלה")
                         fuel_data = self.parse_table(table)
                         if fuel_data:
                             break
@@ -458,7 +443,7 @@ class ModernFuelScraper:
                     break
                     
         except Exception as e:
-            self.log_message(f"שגיאה בחילוץ נתונים: {str(e)}")
+            print(f"שגיאה בחילוץ נתונים: {str(e)}")
             
         return fuel_data
         
@@ -603,12 +588,6 @@ class ModernFuelScraper:
         if not date_text or len(date_text) != 10:
             return False
         return '/' in date_text and date_text.count('/') == 2
-        
-        
-    def save_data(self, fuel_data):
-        """שמירת נתונים לקובץ JSON (בוטל)"""
-        # לא נוצר יותר קובץ JSON
-        pass
     
     def save_to_text_file(self, fuel_data, self_service_price=None):
         """שמירת נתונים לקובץ טקסט"""

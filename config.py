@@ -8,8 +8,6 @@
 
 import os
 
-
-
 # תיקיית הבסיס לכל הפרמטרים
 BASE_PARAMETERS_PATH = r"C:\Users\shir.feldman\Desktop\parametrsUpdate"
 
@@ -115,8 +113,6 @@ def get_delek_mdb_path(day, month, year):
     """מחזיר נתיב מלא לקובץ MDB דלק"""
     filename = DELEK_MDB_FILENAME_FORMAT.format(day=day, month=month, year=year % 100)
     return os.path.join(DELEK_OUTPUT_PATH, filename)
-
-
 
 # ===================================
 # הרצת בדיקות בעת טעינת הקובץ
