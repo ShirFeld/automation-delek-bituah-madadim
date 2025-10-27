@@ -665,23 +665,7 @@ class MainApplication:
             cursor='hand2',
             command=self.fetch_all_madadim
         )
-        fetch_all_button.pack(side='left', padx=10)
-        
-        # כפתור לבדיקה עם מדד אחד
-        test_button = tk.Button(
-            buttons_frame,
-            text="בדיקה עם מדד אחד",
-            font=self.fonts['button'],
-            bg='#4CAF50',
-            fg='white',
-            relief='flat',
-            bd=0,
-            padx=30,
-            pady=10,
-            cursor='hand2',
-            command=self.test_single_madad
-        )
-        test_button.pack(side='left', padx=10)
+        fetch_all_button.pack(padx=10)
         
         # מסגרת לתוצאות
         self.results_frame = tk.Frame(self.madadim_app_frame, bg='#f0f0f0')
@@ -690,111 +674,6 @@ class MainApplication:
         # הוספת אפקטי hover
         fetch_all_button.bind('<Enter>', lambda e: fetch_all_button.config(bg=self.colors['primary_hover']))
         fetch_all_button.bind('<Leave>', lambda e: fetch_all_button.config(bg=self.colors['primary']))
-        
-        test_button.bind('<Enter>', lambda e: test_button.config(bg='#45a049'))
-        test_button.bind('<Leave>', lambda e: test_button.config(bg='#4CAF50'))
-        
-    def test_single_madad(self):
-        """בדיקה עם מדד אחד"""
-        # ניקוי תוצאות קודמות
-        for widget in self.results_frame.winfo_children():
-            widget.destroy()
-            
-        # הצגת סטטוס פשוט במקום טרמינל עמוס
-        status_label = tk.Label(
-            self.results_frame,
-            text="מכין בדיקת מדד יחיד...",
-            font=('Segoe UI', 12, 'bold'),
-            bg='#f0f0f0',
-            fg='#323130'
-        )
-        status_label.pack(pady=20)
-        
-        # אזור תוצאות פשוט
-        results_text = tk.Text(
-            self.results_frame,
-            height=10,
-            width=60,
-            font=('Segoe UI', 10),
-            wrap=tk.WORD
-        )
-        results_text.pack(fill='both', expand=True, pady=10)
-        
-        def add_log(message, color='#ffffff'):
-            """הוספת הודעה פשוטה לתוצאות"""
-            results_text.insert('end', f"{message}\n")
-            results_text.see('end')
-            self.root.update_idletasks()  # עדכון קל יותר
-        
-        add_log("=== מתחיל בדיקה עם מדד אחד ===", 'cyan')
-        
-        try:
-            # שלב 1: יצירת scraper
-            add_log("שלב 1: יוצר את ה-MadadimScraper...")
-            try:
-                scraper = MadadimScraper()
-                add_log("✓ MadadimScraper נוצר בהצלחה", 'green')
-            except Exception as e:
-                add_log(f"❌ שגיאה ביצירת MadadimScraper: {str(e)}", 'red')
-                return
-            
-            # שלב 2: הצגת המדד שנבדק
-            first_indicator = list(scraper.cbs_indicators.items())[0]
-            indicator_name, indicator_code = first_indicator
-            add_log(f"שלב 2: המדד לבדיקה - {indicator_name} (קוד: {indicator_code})", 'yellow')
-            
-            # שלב 3: יצירת קובץ
-            add_log("שלב 3: יוצר קובץ נתונים בסיסי...")
-            try:
-                file_path = scraper.create_data_file()
-                add_log(f"✓ קובץ נוצר בהצלחה: {file_path}", 'green')
-            except Exception as e:
-                add_log(f"❌ שגיאה ביצירת קובץ: {str(e)}", 'red')
-                return
-            
-            # שלב 4: הגדרת דפדפן
-            add_log("שלב 4: מגדיר את הדפדפן (Chrome)...")
-            try:
-                scraper.setup_driver()
-                if scraper.driver is None:
-                    add_log("❌ שגיאה: לא הצלחתי ליצור דפדפן", 'red')
-                    return
-                add_log("✓ דפדפן הוגדר בהצלחה", 'green')
-            except Exception as e:
-                add_log(f"❌ שגיאה בהגדרת דפדפן: {str(e)}", 'red')
-                return
-            
-            # שלב 5: שליפת המדד באמצעות הפונקציה המעודכנת שלך
-            add_log("שלב 5: מריץ שליפת מדד עם הפונקציה המעודכנת...")
-            try:
-                # משתמש בפונקציה scrape_cbs_indicator שתיקנת
-                result = scraper.scrape_cbs_indicator(indicator_name, indicator_code)
-                if result:
-                    add_log("✅ שליפת המדד הושלמה בהצלחה!", 'green')
-                    add_log(f"תוצאה: {result}", 'green')
-                    
-                    # עדכון קובץ הנתונים
-                    add_log("שלב 6: מעדכן קובץ נתונים...")
-                    scraper.update_data_file_with_values({indicator_name: result})
-                    add_log("✓ קובץ עודכן בהצלחה", 'green')
-                else:
-                    add_log("⚠️ שליפת המדד הושלמה אך ללא תוצאה", 'yellow')
-            except Exception as e:
-                add_log(f"❌ שגיאה בשליפת המדד: {str(e)}", 'red')
-                return
-            
-        except Exception as main_e:
-            add_log(f"❌ שגיאה כללית: {str(main_e)}", 'red')
-        finally:
-            # ניקוי
-            try:
-                if 'scraper' in locals() and scraper.driver:
-                    scraper.close_driver()
-                    add_log("✓ דפדפן נסגר", 'green')
-            except:
-                pass
-            
-            add_log("=== סיום בדיקת מדד ===", 'cyan')
     
     def fetch_all_madadim(self):
         """שליפת כל המדדים"""
