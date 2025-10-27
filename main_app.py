@@ -339,12 +339,8 @@ class MainApplication:
                     
                     # קריאה לפונקציה המקורית שמבצעת את כל השליפה
                     # זה מריץ את כל הלוגיקה מ-fuel_scraper.py
+                    # ההודעות מוצגות מתוך fuel_scraper
                     temp_scraper.scrape_fuel_prices()
-                    
-                    # הצגת הודעת הצלחה (רק אם לא הייתה שגיאה)
-                    update_status("התהליך הושלם בהצלחה")
-                    from tkinter import messagebox
-                    messagebox.showinfo("הצלחה", "נתוני דלק נשמרו בהצלחה!")
                     
                 except Exception as e:
                     update_status(f"שגיאה: {str(e)}")

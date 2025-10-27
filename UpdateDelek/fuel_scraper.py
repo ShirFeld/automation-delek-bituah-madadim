@@ -381,10 +381,11 @@ class ModernFuelScraper:
                 
                 self.save_to_text_file(fuel_data, self_service_price)  # שמירה לקובץ טקסט
                 self.save_to_database(fuel_data, self_service_price)   # שמירה לבסיס נתונים
+                self.update_par_dlk_file(fuel_data, self_service_price)  # עדכון קובץ par_dlk.dat
                 self.display_results(fuel_data)
                 self.update_status("התהליך הושלם בהצלחה")
                 try:
-                    messagebox.showinfo("הצלחה", f"נתונים אמיתיים נשמרו בהצלחה!\nנמצאו {len(fuel_data)} מוצרים\nנשמרו קבצים: טקסט ובסיס נתונים")
+                    messagebox.showinfo("הצלחה", f"נתונים אמיתיים נשמרו בהצלחה!\nנמצאו {len(fuel_data)} מוצרים\nנשמרו קבצים: טקסט, בסיס נתונים ו-par_dlk.dat")
                 except:
                     print("הצלחה: נתונים אמיתיים נשמרו בהצלחה!")
             else:
@@ -815,6 +816,139 @@ class ModernFuelScraper:
         except:
             pass  # הטבלה כבר לא קיימת
             
+    def update_par_dlk_file(self, fuel_data, self_service_price=None):
+        """עדכון קובץ par_dlk.dat עם נתוני דלק חדשים"""
+        print("\n" + "="*60)
+        print(" מתחיל עדכון par_dlk.dat")
+        print("="*60)
+        try:
+            par_dlk_path = os.path.join(config.DELEK_OUTPUT_PATH, "par_dlk.dat")
+            print(f" נתיב קובץ: {par_dlk_path}")
+            
+            if not os.path.exists(par_dlk_path):
+                print(f" שגיאה: קובץ par_dlk.dat לא נמצא ב-{par_dlk_path}")
+                print(f" וודא שהקובץ קיים בתיקייה")
+                return
+            
+            print("✅ קובץ par_dlk.dat נמצא")
+            
+            # קריאת הקובץ
+            print("📖 קורא את הקובץ...")
+            with open(par_dlk_path, 'r', encoding='cp862') as f:
+                lines = f.readlines()
+            
+            if not lines:
+                print("❌ קובץ par_dlk.dat ריק")
+                return
+            
+            print(f"✅ נמצאו {len(lines)} שורות בקובץ")
+            
+            # השורה האחרונה
+            last_line = lines[-1].rstrip('\n\r')
+            print(f"📄 שורה אחרונה בקובץ: {last_line[:50]}...")
+            
+            # קבלת התאריך החדש - ראשון לחודש הנוכחי
+            date_from_data = fuel_data[0]['date']  # פורמט: dd/mm/yyyy
+            date_parts = date_from_data.split('/')
+            new_date = f"{date_parts[2][2:]}/{date_parts[1]}/01"  # yy/mm/01
+            
+            # המרת מחירים לפורמט הקובץ (הסרת נקודה עשרונית, כפל ב-100)
+            benzin98 = None
+            benzin95 = None
+            soler = None
+            neft = None
+            atzmai = self_service_price
+            
+            for item in fuel_data:
+                fuel_type = item['fuel_type']
+                price_agora = round(item['price'] * 100)  # המרה לאגורות עם עיגול נכון
+                
+                if 'בנע סופר 98' in fuel_type or 'בנ"ע סופר 98' in fuel_type:
+                    benzin98 = price_agora
+                elif 'בנע 95' in fuel_type or 'בנ"ע 95' in fuel_type:
+                    benzin95 = price_agora
+                elif 'סולר-תחבורה' in fuel_type or 'סולר תחבורה' in fuel_type:
+                    soler = price_agora
+                elif 'נפט' in fuel_type:
+                    neft = price_agora
+            
+            if atzmai:
+                atzmai = round(atzmai * 100)  # המרה לאגורות עם עיגול נכון
+            
+            print(f"\n נתוני המחירים לעדכון:")
+            print(f"    תאריך: {new_date}")
+            print(f"    בנזין 98: {benzin98}")
+            print(f"    בנזין 95: {benzin95}")
+            print(f"    סולר: {soler}")
+            print(f"     נפט: {neft}")
+            print(f"    עצמאי: {atzmai}")
+            
+            # נשכפל את השורה האחרונה ונשנה רק את הספרות
+            new_line = last_line
+            
+            # החלפת התאריך (8 תווים ראשונים)
+            new_line = new_date + new_line[8:]
+            
+            # עכשיו נחליף את הספרות בעמודות הספציפיות
+            # נמצא את המיקומים של כל ערך על ידי חיפוש הספרות בשורה
+            # פורמט: YY/MM/DD│    │    │ XXX│ XXX│XXXX│XXXX│ XXX│ 000│
+            
+            # נחלק את השורה לחלקים לפי התווים המפרידים
+            parts = new_line.split(new_line[8])  # מפריד לפי התו בעמדה 8
+            
+            # parts[0] = תאריך (כבר עדכנו)
+            # parts[1] = רווחים
+            # parts[2] = רווחים
+            # parts[3] = בנזין 98
+            # parts[4] = בנזין 95
+            # parts[5] = סולר
+            # parts[6] = נפט
+            # parts[7] = עצמאי
+            # parts[8] = 000
+            
+            if len(parts) >= 9:
+                # בנזין 98 - 3 ספרות עם רווח לפני
+                if benzin98:
+                    parts[3] = f" {benzin98:3d}"
+                
+                # בנזין 95 - 3 ספרות עם רווח לפני
+                if benzin95:
+                    parts[4] = f" {benzin95:3d}"
+                
+                # סולר - 4 ספרות
+                if soler:
+                    parts[5] = f"{soler:4d}"
+                
+                # נפט - 4 ספרות
+                if neft:
+                    parts[6] = f"{neft:4d}"
+                
+                # עצמאי - 3 ספרות עם רווח לפני
+                if atzmai:
+                    parts[7] = f" {atzmai:3d}"
+                
+                # בניית השורה מחדש
+                sep = last_line[8]
+                new_line = sep.join(parts)
+            
+            print(f"\n שורה חדשה שתתווסף:")
+            print(f"   {new_line}")
+            
+            # הוספת השורה החדשה לסוף הקובץ
+            print("\n כותב לקובץ...")
+            with open(par_dlk_path, 'a', encoding='cp862') as f:
+                f.write('\n' + new_line)
+            
+            print(f"\n✅✅✅ קובץ par_dlk.dat עודכן בהצלחה! ✅✅✅")
+            print(f"📁 מיקום: {par_dlk_path}")
+            print("="*60 + "\n")
+            
+        except Exception as e:
+            print(f"\n❌❌❌ שגיאה בעדכון par_dlk.dat: {str(e)} ❌❌❌")
+            import traceback
+            traceback.print_exc()
+            print("="*60 + "\n")
+    
     def run(self):
         """הפעלת האפליקציה"""
         self.root.mainloop()
