@@ -155,8 +155,18 @@ class InsuranceScraper:
             elif display_callback:
                 display_callback("⚠️ יצירת MDB נכשלה")
             
+            # עדכון קובץ par_rech.dat
+            if display_callback:
+                display_callback("\n📋 מעדכן קובץ par_rech.dat...")
             if update_callback:
-                update_callback(f"הושלם: {results['total_success']}/37 + MDB")
+                update_callback("מעדכן par_rech.dat...")
+            
+            self.update_par_rech_file(insurance_data)
+            if display_callback:
+                display_callback("✅ קובץ par_rech.dat עודכן בהצלחה")
+            
+            if update_callback:
+                update_callback(f"הושלם: {results['total_success']}/37 + MDB + par_rech.dat")
             
         except Exception as e:
             print(f"שגיאה בשליפה מקיפה: {e}")
@@ -397,3 +407,147 @@ class InsuranceScraper:
         except Exception as e:
             print(f"❌ שגיאה ביצירת MDB: {e}")
             return None
+    
+    def update_par_rech_file(self, insurance_data):
+        """עדכון קובץ par_rech.dat עם נתוני ביטוח חדשים"""
+        print("\n" + "="*60)
+        print("🔄 מתחיל עדכון par_rech.dat")
+        print("="*60)
+        try:
+            par_rech_path = os.path.join(config.BITUAH_RECHEV_OUTPUT_PATH, "par_rech.dat")
+            print(f"📂 נתיב קובץ: {par_rech_path}")
+            
+            if not os.path.exists(par_rech_path):
+                print(f"❌ שגיאה: קובץ par_rech.dat לא נמצא ב-{par_rech_path}")
+                print(f"💡 וודא שהקובץ קיים בתיקייה")
+                return
+            
+            print("✅ קובץ par_rech.dat נמצא")
+            
+            # קריאת הקובץ
+            print("📖 קורא את הקובץ...")
+            with open(par_rech_path, 'r', encoding='cp862') as f:
+                lines = f.readlines()
+            
+            if not lines:
+                print("❌ קובץ par_rech.dat ריק")
+                return
+            
+            print(f"✅ נמצאו {len(lines)} שורות בקובץ")
+            
+            # מציאת השורה האחרונה שמתחילה ב-00012:
+            last_00012_line = None
+            last_00012_index = -1
+            for i, line in enumerate(lines):
+                if line.startswith('00012:'):
+                    last_00012_line = line.rstrip('\n\r')
+                    last_00012_index = i
+            
+            if not last_00012_line:
+                print("❌ לא נמצאה שורה שמתחילה ב-00012:")
+                return
+            
+            print(f"✅ נמצאה שורה אחרונה ב-00012 (שורה {last_00012_index + 1})")
+            print(f"📄 שורה: {last_00012_line[:80]}...")
+            
+            # קביעת תאריך חדש (חודש הבא)
+            next_month = (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1)
+            new_date = f"{next_month.strftime('%y/%m')}"
+            print(f"📅 תאריך חדש: {new_date}")
+            
+            # פיצול השורה לפי :
+            parts = last_00012_line.split(':')
+            
+            if len(parts) < 45:
+                print(f"❌ שגיאה: מבנה שורה לא תקין, יש רק {len(parts)} חלקים")
+                return
+            
+            # פונקציה עזר לשמירת פורמט הרווחים
+            def format_value_preserve_spaces(original_part, new_value):
+                """שומר על הרווחים של החלק המקורי ומחליף רק את הערך"""
+                # ספירת רווחים בהתחלה ובסוף
+                leading_spaces = len(original_part) - len(original_part.lstrip())
+                trailing_spaces = len(original_part) - len(original_part.rstrip())
+                # בניית הערך החדש עם אותם רווחים
+                return ' ' * leading_spaces + str(new_value) + ' ' * trailing_spaces
+            
+            # עדכון התאריך - שומר על הפורמט
+            parts[1] = format_value_preserve_spaces(parts[1], new_date)
+            
+            # עדכון נתוני רכב פרטי (6 קבוצות גיל, 4 נפחי מנוע לכל אחת)
+            private_data = insurance_data.get('private_car', {})
+            age_groups_order = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
+            engine_sizes_order = ['עד 1050', 'מ-1051 עד 1550', 'מ-1551 עד 2050', 'מ-2051 ומעלה']
+            
+            part_index = 2  # מתחיל אחרי התאריך
+            print("\n💰 מעדכן נתוני רכב פרטי:")
+            for age_group in age_groups_order:
+                age_value = age_group.split('-')[0]  # 17, 21, 24, 30, 40, 50
+                parts[part_index] = format_value_preserve_spaces(parts[part_index], age_value)
+                part_index += 1
+                
+                print(f"   🚗 קבוצת גיל {age_group}:")
+                for engine_size in engine_sizes_order:
+                    price = private_data.get(age_group, {}).get(engine_size)
+                    if price:
+                        parts[part_index] = format_value_preserve_spaces(parts[part_index], int(price))
+                        print(f"      • {engine_size}: {int(price)}")
+                    part_index += 1
+            
+            # עדכון נתוני רכב מסחרי (5 קבוצות גיל, 2 משקלים לכל אחת)
+            commercial_data = insurance_data.get('commercial_car', {})
+            commercial_age_groups_order = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
+            weight_categories_order = ['עד 4000 (כולל)', 'מעל 4000']
+            
+            print("\n🚛 מעדכן נתוני רכב מסחרי:")
+            for age_group in commercial_age_groups_order:
+                age_value = age_group.split('-')[0]  # 17, 21, 24, 40, 50
+                parts[part_index] = format_value_preserve_spaces(parts[part_index], age_value)
+                part_index += 1
+                
+                print(f"   🚚 קבוצת גיל {age_group}:")
+                for weight in weight_categories_order:
+                    price = commercial_data.get(age_group, {}).get(weight)
+                    if price:
+                        parts[part_index] = format_value_preserve_spaces(parts[part_index], int(price))
+                        print(f"      • {weight}: {int(price)}")
+                    part_index += 1
+            
+            # עדכון נתוני רכב מיוחד (3 סוגים)
+            special_data = insurance_data.get('special_vehicle', {})
+            special_types_order = ['Nigrar', 'Handasi', 'Agricalture']
+            
+            print("\n🚜 מעדכן נתוני רכב מיוחד:")
+            for special_type in special_types_order:
+                price = special_data.get(special_type)
+                if price:
+                    parts[part_index] = format_value_preserve_spaces(parts[part_index], int(price))
+                    print(f"   • {special_type}: {int(price)}")
+                part_index += 1
+            
+            # בניית השורה החדשה
+            new_line = ':'.join(parts)
+            
+            print(f"\n📝 שורה חדשה שתתווסף:")
+            print(f"   {new_line[:100]}...")
+            
+            # הכנסת השורה החדשה מיד אחרי השורה האחרונה של 00012
+            print("\n💾 כותב לקובץ...")
+            print(f"   מכניס שורה חדשה במיקום {last_00012_index + 2} (אחרי השורה האחרונה של 00012)")
+            
+            # הכנסת השורה החדשה במיקום הנכון
+            lines.insert(last_00012_index + 1, new_line + '\n')
+            
+            # כתיבת כל הקובץ מחדש
+            with open(par_rech_path, 'w', encoding='cp862') as f:
+                f.writelines(lines)
+            
+            print(f"\n✅✅✅ קובץ par_rech.dat עודכן בהצלחה! ✅✅✅")
+            print(f"📁 מיקום: {par_rech_path}")
+            print("="*60 + "\n")
+            
+        except Exception as e:
+            print(f"\n❌❌❌ שגיאה בעדכון par_rech.dat: {str(e)} ❌❌❌")
+            import traceback
+            traceback.print_exc()
+            print("="*60 + "\n")
