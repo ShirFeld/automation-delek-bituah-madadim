@@ -363,13 +363,21 @@ class InsuranceScraper:
             except Exception as e:
                 print(f"שגיאה ביצירת תיקייה: {e}")
                 return None
+            
+            # תאריך עתידי - לשימוש בתוך הטבלה
             next_month = (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1)
-            image_path = os.path.join(save_path, f"{next_month.strftime('%m%y')}.jpg")
+            
+            # תאריך נוכחי - לשם הקובץ
+            current_month = datetime.now()
+            image_path = os.path.join(save_path, f"{current_month.strftime('%m%y')}.jpg")
             
             # מחיקת קובץ קיים אם קיים
             if os.path.exists(image_path):
                 os.remove(image_path)
                 print(f"🗑️ מחק קובץ תמונה קיים: {image_path}")
+            
+            print(f"📁 שם קובץ תמונה: {current_month.strftime('%m%y')}.jpg (חודש נוכחי)")
+            print(f"📅 תאריך בטבלה: {next_month.strftime('%d/%m/%Y')} (חודש עתידי)")
             
             tables = prepare_all_tables_data(next_month.strftime('%d/%m/%Y'), insurance_data or {})
             
@@ -414,19 +422,24 @@ class InsuranceScraper:
         print("🔄 מתחיל עדכון par_rech.dat")
         print("="*60)
         try:
-            par_rech_path = os.path.join(config.BITUAH_RECHEV_OUTPUT_PATH, "par_rech.dat")
-            print(f"📂 נתיב קובץ: {par_rech_path}")
+            # נתיב קריאה - מהשרת
+            par_rech_source_path = config.BITUAH_RECHEV_PARAM_SOURCE_FILE
+            print(f"📂 נתיב מקור (קריאה): {par_rech_source_path}")
             
-            if not os.path.exists(par_rech_path):
-                print(f"❌ שגיאה: קובץ par_rech.dat לא נמצא ב-{par_rech_path}")
-                print(f"💡 וודא שהקובץ קיים בתיקייה")
+            # נתיב כתיבה - לתיקייה המקומית
+            par_rech_output_path = os.path.join(config.BITUAH_RECHEV_OUTPUT_PATH, "par_rech.dat")
+            print(f"📂 נתיב יעד (כתיבה): {par_rech_output_path}")
+            
+            if not os.path.exists(par_rech_source_path):
+                print(f"❌ שגיאה: קובץ par_rech.dat לא נמצא ב-{par_rech_source_path}")
+                print(f"💡 וודא שהקובץ קיים בשרת")
                 return
             
-            print("✅ קובץ par_rech.dat נמצא")
+            print("✅ קובץ par_rech.dat נמצא במקור")
             
-            # קריאת הקובץ
-            print("📖 קורא את הקובץ...")
-            with open(par_rech_path, 'r', encoding='cp862') as f:
+            # קריאת הקובץ מהמקור
+            print("📖 קורא את הקובץ מהשרת...")
+            with open(par_rech_source_path, 'r', encoding='cp862') as f:
                 lines = f.readlines()
             
             if not lines:
@@ -531,19 +544,26 @@ class InsuranceScraper:
             print(f"\n📝 שורה חדשה שתתווסף:")
             print(f"   {new_line[:100]}...")
             
+            # וידוא שהשורה שלפני המיקום החדש מסתיימת ב-newline
+            if last_00012_index >= 0 and last_00012_index < len(lines):
+                if not lines[last_00012_index].endswith('\n'):
+                    lines[last_00012_index] = lines[last_00012_index] + '\n'
+            
             # הכנסת השורה החדשה מיד אחרי השורה האחרונה של 00012
-            print("\n💾 כותב לקובץ...")
+            print("\n💾 כותב קובץ מעודכן לתיקייה המקומית...")
             print(f"   מכניס שורה חדשה במיקום {last_00012_index + 2} (אחרי השורה האחרונה של 00012)")
+            print(f"   סה\"כ שורות בקובץ החדש: {len(lines) + 1}")
             
             # הכנסת השורה החדשה במיקום הנכון
             lines.insert(last_00012_index + 1, new_line + '\n')
             
-            # כתיבת כל הקובץ מחדש
-            with open(par_rech_path, 'w', encoding='cp862') as f:
+            # כתיבת הקובץ המעודכן לתיקייה היעד
+            with open(par_rech_output_path, 'w', encoding='cp862') as f:
                 f.writelines(lines)
             
             print(f"\n✅✅✅ קובץ par_rech.dat עודכן בהצלחה! ✅✅✅")
-            print(f"📁 מיקום: {par_rech_path}")
+            print(f"📂 נקרא מ: {par_rech_source_path}")
+            print(f"📁 נשמר ב: {par_rech_output_path}")
             print("="*60 + "\n")
             
         except Exception as e:

@@ -23,6 +23,10 @@ MADADIM_FILENAME_FORMAT = "madadim{month:02d}{year:02d}.txt"
 # תיקיית יעד לקבצי ביטוח רכב
 BITUAH_RECHEV_OUTPUT_PATH = os.path.join(BASE_PARAMETERS_PATH, "BituahRechev")
 
+# נתיב מקור לקובץ par_rech.dat (לקריאה)
+BITUAH_RECHEV_PARAM_SOURCE_PATH = r"p:\kolnatun\updates\paramPro"
+BITUAH_RECHEV_PARAM_SOURCE_FILE = os.path.join(BITUAH_RECHEV_PARAM_SOURCE_PATH, "par_rech.dat")
+
 # פורמט שם קובץ תמונת טבלאות: insurance_tables_YYYYMMDD_HHMMSS.png
 BITUAH_RECHEV_IMAGE_FILENAME_FORMAT = "insurance_tables_{timestamp}.png"
 
@@ -32,6 +36,10 @@ BITUAH_RECHEV_MDB_FILENAME_FORMAT = "insurance_data_{timestamp}.mdb"
 
 # תיקיית יעד לקבצי דלק
 DELEK_OUTPUT_PATH = os.path.join(BASE_PARAMETERS_PATH, "DELEK")
+
+# נתיב מקור לקובץ par_dlk.dat (לקריאה)
+DELEK_PARAM_SOURCE_PATH = r"p:\kolnatun\updates\paramPro"
+DELEK_PARAM_SOURCE_FILE = os.path.join(DELEK_PARAM_SOURCE_PATH, "par_dlk.dat")
 
 # פורמט שם קובץ טקסט: DDMMYY.txt
 # דוגמה: 200924.txt (20 ספטמבר 2024)
