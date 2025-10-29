@@ -721,16 +721,29 @@ class ModernFuelScraper:
             print(f"SAtzmi96: {data_mapping['SAtzmi96']}")
             print("=" * 40)
             
-            # יצירת קובץ Access 2000 אמיתי
+            # יצירת קובץ MDB מ-template או מאפס
             if HAS_WIN32COM:
                 try:
-                    self.create_real_access_db(data_mapping, db_file)
-                    print(f"נוצר קובץ Access 2000 אמיתי: {db_file}")
+                    # נתיב ה-template
+                    template_path = os.path.join(base_path, "kne.mdb")
+                    print(f"📋 מחפש template: {template_path}")
+                    
+                    if os.path.exists(template_path):
+                        print("🚀 מנסה ליצור MDB מ-template...")
+                        self.create_mdb_from_template(data_mapping, db_file, template_path)
+                        print(f"✅ נוצר קובץ MDB מ-template: {db_file}")
+                    else:
+                        print(f"⚠️ Template לא נמצא: {template_path}")
+                        print("🔄 יוצר MDB בשיטה הישנה (ללא template)...")
+                        self.create_real_access_db(data_mapping, db_file)
+                        print(f"✅ נוצר קובץ Access 2000 אמיתי: {db_file}")
                 except Exception as e:
-                    print(f"לא הצלחתי ליצור Access 2000: {str(e)}")
+                    print(f"❌ לא הצלחתי ליצור MDB: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     return
             else:
-                print("win32com לא זמין - לא ניתן ליצור Access 2000")
+                print("⚠️ win32com לא זמין - לא ניתן ליצור Access 2000")
                 return
             
             print(f"נתונים נשמרו בבסיס נתונים Access 2000: {db_file}")
@@ -739,6 +752,84 @@ class ModernFuelScraper:
             print(f"שגיאה בשמירת בסיס נתונים: {str(e)}")
     
 
+    
+    def create_mdb_from_template(self, data_mapping, db_file, template_path):
+        """יצירת קובץ MDB מ-template ע"י העתקה והכנסת נתונים"""
+        try:
+            import pythoncom
+            import shutil
+            
+            # בדיקה שה-template קיים
+            if not os.path.exists(template_path):
+                print(f"❌ קובץ template לא נמצא: {template_path}")
+                return None
+            
+            print(f"📋 משתמש ב-template: {template_path}")
+            
+            # מחיקת קובץ יעד קיים
+            if os.path.exists(db_file):
+                os.remove(db_file)
+                print("🗑️ מחק קובץ MDB קיים")
+            
+            # העתקת ה-template
+            shutil.copy2(template_path, db_file)
+            print(f"✅ העתיק template ל-{db_file}")
+            
+            # אתחול COM
+            pythoncom.CoInitialize()
+            
+            try:
+                # פתיחת הקובץ המועתק
+                access_app = win32com.client.Dispatch("Access.Application")
+                access_app.OpenCurrentDatabase(db_file)
+                print("✅ פתח קובץ MDB מועתק")
+                
+                # הכנסת נתונים באמצעות Recordset (יותר בטוח מ-RunSQL)
+                print("\n🔄 מכניס נתונים לטבלה...")
+                db = access_app.CurrentDb()
+                recordset = db.OpenRecordset("tblMehirDelek_edit")
+                
+                recordset.AddNew()
+                recordset.Fields("EffectiveDate").Value = data_mapping['EffectiveDate']
+                recordset.Fields("Benzin91").Value = data_mapping['Benzin91']
+                recordset.Fields("Benzin96").Value = data_mapping['Benzin96']
+                recordset.Fields("Benzin98").Value = data_mapping['Benzin98']
+                recordset.Fields("Benzin95").Value = data_mapping['Benzin95']
+                recordset.Fields("Soler").Value = data_mapping['Soler']
+                recordset.Fields("Neft").Value = data_mapping['Neft']
+                recordset.Fields("SAtzmi95").Value = data_mapping['SAtzmi95']
+                recordset.Fields("SAtzmi96").Value = data_mapping['SAtzmi96']
+                recordset.Update()
+                
+                print(f"✅ הכניס נתונים:")
+                print(f"   תאריך: {data_mapping['EffectiveDate']}")
+                print(f"   בנזין 95: {data_mapping['Benzin95']}")
+                print(f"   בנזין 98: {data_mapping['Benzin98']}")
+                print(f"   סולר: {data_mapping['Soler']}")
+                print(f"   נפט: {data_mapping['Neft']}")
+                print(f"   עצמאי 95: {data_mapping['SAtzmi95']}")
+                
+                # בדיקה כמה שורות יש
+                recordset.MoveLast()
+                count = recordset.RecordCount
+                recordset.Close()
+                print(f"📊 מספר שורות בטבלה: {count}")
+                
+                # סגירת הקובץ (שומר אוטומטית)
+                access_app.CloseCurrentDatabase()
+                access_app.Quit()
+                print("✅ סגר את Access")
+                
+                print(f"✅ קובץ MDB נוצר בהצלחה: {db_file}")
+                
+            finally:
+                pythoncom.CoUninitialize()
+                
+        except Exception as e:
+            print(f"❌ שגיאה ביצירת MDB מ-template: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def create_real_access_db(self, data_mapping, db_file):
         """יצירת קובץ Access 2000 באמצעות COM"""

@@ -41,21 +41,17 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
             print(f"❌ שגיאה ביצירת תיקייה: {e}")
             return None
         
-        # יצירת שם הקובץ - פורמט kneMMYY או שם מותאם (מבוסס על חודש התחולה הבא)
+        # יצירת שם הקובץ - פורמט kneMMYY (מבוסס על החודש הנוכחי)
         if mdb_filename:
             mdb_path = os.path.join(save_path, mdb_filename)
             month_year = mdb_filename.replace('kne', '').replace('.mdb', '')
         else:
-            # נחשב קודם את חודש התחולה (החודש הבא) ונשתמש בו לשם הקובץ
+            # שם הקובץ לפי החודש הנוכחי
             current_date = datetime.now()
-            if current_date.month == 12:
-                next_month_tmp = datetime(current_date.year + 1, 1, 1)
-            else:
-                next_month_tmp = datetime(current_date.year, current_date.month + 1, 1)
-            month_year = next_month_tmp.strftime("%m%y")  # MMYY של חודש התחולה
+            month_year = current_date.strftime("%m%y")  # MMYY של חודש נוכחי
             mdb_path = os.path.join(save_path, f"kne{month_year}.mdb")
         
-        # תאריך יעיל - הראשון לחודש הבא
+        # תאריך יעיל - הראשון לחודש הבא (לתוך הטבלה)
         current_date = datetime.now()
         if current_date.month == 12:
             next_month = datetime(current_date.year + 1, 1, 1)
@@ -64,21 +60,40 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
         effective_date = next_month.strftime("%d/%m/%Y")  # פורמט ישראלי: DD/MM/YYYY
         
         print(f"📅 תאריך נוכחי: {current_date.strftime('%d/%m/%Y')}")
-        print(f"🗓️ תאריך יעיל (הראשון לחודש הבא): {effective_date}")
+        print(f"📁 שם קובץ: kne{month_year}.mdb (חודש נוכחי)")
+        print(f"🗓️ תאריך יעיל בטבלה: {effective_date} (חודש עתידי)")
         
         print(f"📅 יוצר קובץ נתונים: {os.path.basename(mdb_path)}")
         print(f"🗓️ תאריך יעיל: {effective_date}")
         
-        # ניסיון ליצור Access 2000 אם win32com זמין
+        # ניסיון ליצור MDB מ-template אם win32com זמין
         print(f"🔍 בודק אם win32com זמין: {HAS_WIN32COM}")
         if HAS_WIN32COM:
             try:
-                print("🚀 מנסה ליצור Access 2000...")
-                result = create_real_access_mdb(mdb_path, effective_date, insurance_data)
-                print(f"✅ נוצר קובץ Access 2000: {mdb_path}")
-                return result
+                # נתיב ה-template
+                template_path = os.path.join(save_path, "kne.mdb")
+                print(f"📋 מחפש template: {template_path}")
+                
+                if os.path.exists(template_path):
+                    print("🚀 מנסה ליצור MDB מ-template...")
+                    result = create_mdb_from_template(mdb_path, effective_date, insurance_data, template_path)
+                    if result:
+                        print(f"✅ נוצר קובץ MDB מ-template: {mdb_path}")
+                        return result
+                    else:
+                        print("⚠️ נכשל ביצירת MDB מ-template, מנסה שיטה ישנה...")
+                        result = create_real_access_mdb(mdb_path, effective_date, insurance_data)
+                        return result
+                else:
+                    print(f"⚠️ Template לא נמצא: {template_path}")
+                    print("🔄 יוצר MDB בשיטה הישנה (ללא template)...")
+                    result = create_real_access_mdb(mdb_path, effective_date, insurance_data)
+                    print(f"✅ נוצר קובץ Access 2000: {mdb_path}")
+                    return result
             except Exception as e:
-                print(f"⚠️ לא הצלחתי ליצור Access 2000: {str(e)}")
+                print(f"⚠️ לא הצלחתי ליצור MDB: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 print("🔄 מנסה ליצור Access 2000 דרך פונקציה אחרת...")
                 result = create_sqlite_file(save_path, month_year, effective_date, insurance_data, os.path.basename(mdb_path))
                 return result
@@ -392,6 +407,148 @@ def create_simple_csv(save_path, month_year, effective_date, insurance_data):
         
     except Exception as e:
         print(f"❌ שגיאה ביצירת CSV: {str(e)}")
+        return None
+
+def create_mdb_from_template(mdb_path, effective_date, insurance_data, template_path):
+    """יצירת קובץ MDB מ-template ע"י העתקה והכנסת נתונים"""
+    try:
+        import shutil
+        
+        # בדיקה שה-template קיים
+        if not os.path.exists(template_path):
+            print(f"❌ קובץ template לא נמצא: {template_path}")
+            return None
+        
+        print(f"📋 משתמש ב-template: {template_path}")
+        
+        # מחיקת קובץ יעד קיים
+        if os.path.exists(mdb_path):
+            os.remove(mdb_path)
+            print("🗑️ מחק קובץ MDB קיים")
+        
+        # העתקת ה-template
+        shutil.copy2(template_path, mdb_path)
+        print(f"✅ העתיק template ל-{mdb_path}")
+        
+        # אתחול COM
+        pythoncom.CoInitialize()
+        
+        try:
+            # פתיחת הקובץ המועתק
+            access_app = win32com.client.Dispatch("Access.Application")
+            access_app.OpenCurrentDatabase(mdb_path)
+            print("✅ פתח קובץ MDB מועתק")
+            
+            # הכנסת נתונים לטבלה 1: tblBituachHova_edit (רכב מיוחד)
+            nigrar_value = None
+            handasi_value = None
+            agricalture_value = None
+            
+            if insurance_data and 'special_vehicle' in insurance_data:
+                special_data = insurance_data['special_vehicle']
+                if 'Nigrar' in special_data and special_data['Nigrar']:
+                    nigrar_value = int(special_data['Nigrar'])
+                if 'Handasi' in special_data and special_data['Handasi']:
+                    handasi_value = int(special_data['Handasi'])
+                if 'Agricalture' in special_data and special_data['Agricalture']:
+                    agricalture_value = int(special_data['Agricalture'])
+            
+            if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
+                print("\n🔄 מכניס נתונים לטבלה 1 (רכב מיוחד)...")
+                db = access_app.CurrentDb()
+                recordset = db.OpenRecordset("tblBituachHova_edit")
+                recordset.AddNew()
+                recordset.Fields("EffectiveDate").Value = effective_date
+                recordset.Fields("Nigrar").Value = nigrar_value
+                recordset.Fields("Handasi").Value = handasi_value
+                recordset.Fields("Agricalture").Value = agricalture_value
+                recordset.Update()
+                recordset.Close()
+                print(f"✅ הכניס נתונים לטבלה 1: {nigrar_value}, {handasi_value}, {agricalture_value}")
+            
+            # הכנסת נתונים לטבלה 2: tblBituachHovaMishari_edit (רכב מסחרי)
+            print("\n🔄 מכניס נתונים לטבלה 2 (רכב מסחרי)...")
+            commercial_ages = [17, 21, 24, 40, 50]
+            commercial_age_groups = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
+            
+            db = access_app.CurrentDb()
+            recordset2 = db.OpenRecordset("tblBituachHovaMishari_edit")
+            
+            for i, age in enumerate(commercial_ages):
+                age_group = commercial_age_groups[i]
+                ad1_value = None
+                ad2_value = None
+                
+                if insurance_data and 'commercial_car' in insurance_data and age_group in insurance_data['commercial_car']:
+                    age_data = insurance_data['commercial_car'][age_group]
+                    ad1_value = age_data.get('עד 4000 (כולל)')
+                    ad2_value = age_data.get('מעל 4000')
+                    if ad1_value is not None and ad2_value is not None:
+                        ad1_value = int(ad1_value)
+                        ad2_value = int(ad2_value)
+                        
+                        recordset2.AddNew()
+                        recordset2.Fields("EffectiveDate").Value = effective_date
+                        recordset2.Fields("Age").Value = age
+                        recordset2.Fields("Ad1").Value = ad1_value
+                        recordset2.Fields("Ad2").Value = ad2_value
+                        recordset2.Update()
+                        print(f"✅ רכב מסחרי גיל {age}: {ad1_value}, {ad2_value}")
+            
+            recordset2.Close()
+            
+            # הכנסת נתונים לטבלה 3: tblBituachHovaPrati_edit (רכב פרטי)
+            print("\n🔄 מכניס נתונים לטבלה 3 (רכב פרטי)...")
+            private_ages = [17, 21, 24, 30, 40, 50]
+            private_age_groups = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
+            
+            recordset3 = db.OpenRecordset("tblBituachHovaPrati_edit")
+            
+            for i, age in enumerate(private_ages):
+                age_group = private_age_groups[i]
+                ad1_value = None
+                ad2_value = None
+                ad3_value = None
+                ad4_value = None
+                
+                if insurance_data and 'private_car' in insurance_data and age_group in insurance_data['private_car']:
+                    age_data = insurance_data['private_car'][age_group]
+                    ad1_value = age_data.get('עד 1050')
+                    ad2_value = age_data.get('מ-1051 עד 1550')
+                    ad3_value = age_data.get('מ-1551 עד 2050')
+                    ad4_value = age_data.get('מ-2051 ומעלה')
+                    if ad1_value is not None and ad2_value is not None and ad3_value is not None and ad4_value is not None:
+                        ad1_value = int(ad1_value)
+                        ad2_value = int(ad2_value)
+                        ad3_value = int(ad3_value)
+                        ad4_value = int(ad4_value)
+                        
+                        recordset3.AddNew()
+                        recordset3.Fields("EffectiveDate").Value = effective_date
+                        recordset3.Fields("Age").Value = age
+                        recordset3.Fields("Ad1").Value = ad1_value
+                        recordset3.Fields("Ad2").Value = ad2_value
+                        recordset3.Fields("Ad3").Value = ad3_value
+                        recordset3.Fields("Ad4").Value = ad4_value
+                        recordset3.Update()
+                        print(f"✅ רכב פרטי גיל {age}: {ad1_value}, {ad2_value}, {ad3_value}, {ad4_value}")
+            
+            recordset3.Close()
+            
+            # סגירת הקובץ
+            access_app.CloseCurrentDatabase()
+            access_app.Quit()
+            print("✅ סגר את Access")
+            
+            return mdb_path
+            
+        finally:
+            pythoncom.CoUninitialize()
+            
+    except Exception as e:
+        print(f"❌ שגיאה ביצירת MDB מ-template: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def create_real_access_mdb(mdb_path, effective_date, insurance_data):
