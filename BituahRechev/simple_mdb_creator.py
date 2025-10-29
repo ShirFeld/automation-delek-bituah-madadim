@@ -41,21 +41,17 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
             print(f"❌ שגיאה ביצירת תיקייה: {e}")
             return None
         
-        # יצירת שם הקובץ - פורמט kneMMYY או שם מותאם (מבוסס על חודש התחולה הבא)
+        # יצירת שם הקובץ - פורמט kneMMYY (מבוסס על החודש הנוכחי)
         if mdb_filename:
             mdb_path = os.path.join(save_path, mdb_filename)
             month_year = mdb_filename.replace('kne', '').replace('.mdb', '')
         else:
-            # נחשב קודם את חודש התחולה (החודש הבא) ונשתמש בו לשם הקובץ
+            # שם הקובץ לפי החודש הנוכחי
             current_date = datetime.now()
-            if current_date.month == 12:
-                next_month_tmp = datetime(current_date.year + 1, 1, 1)
-            else:
-                next_month_tmp = datetime(current_date.year, current_date.month + 1, 1)
-            month_year = next_month_tmp.strftime("%m%y")  # MMYY של חודש התחולה
+            month_year = current_date.strftime("%m%y")  # MMYY של חודש נוכחי
             mdb_path = os.path.join(save_path, f"kne{month_year}.mdb")
         
-        # תאריך יעיל - הראשון לחודש הבא
+        # תאריך יעיל - הראשון לחודש הבא (לתוך הטבלה)
         current_date = datetime.now()
         if current_date.month == 12:
             next_month = datetime(current_date.year + 1, 1, 1)
@@ -64,7 +60,8 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
         effective_date = next_month.strftime("%d/%m/%Y")  # פורמט ישראלי: DD/MM/YYYY
         
         print(f"📅 תאריך נוכחי: {current_date.strftime('%d/%m/%Y')}")
-        print(f"🗓️ תאריך יעיל (הראשון לחודש הבא): {effective_date}")
+        print(f"📁 שם קובץ: kne{month_year}.mdb (חודש נוכחי)")
+        print(f"🗓️ תאריך יעיל בטבלה: {effective_date} (חודש עתידי)")
         
         print(f"📅 יוצר קובץ נתונים: {os.path.basename(mdb_path)}")
         print(f"🗓️ תאריך יעיל: {effective_date}")
