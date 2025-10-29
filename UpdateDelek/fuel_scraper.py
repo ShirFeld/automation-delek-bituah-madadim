@@ -910,22 +910,27 @@ class ModernFuelScraper:
     def update_par_dlk_file(self, fuel_data, self_service_price=None):
         """עדכון קובץ par_dlk.dat עם נתוני דלק חדשים"""
         print("\n" + "="*60)
-        print(" מתחיל עדכון par_dlk.dat")
+        print("🔄 מתחיל עדכון par_dlk.dat")
         print("="*60)
         try:
-            par_dlk_path = os.path.join(config.DELEK_OUTPUT_PATH, "par_dlk.dat")
-            print(f" נתיב קובץ: {par_dlk_path}")
+            # נתיב קריאה - מהשרת
+            par_dlk_source_path = config.DELEK_PARAM_SOURCE_FILE
+            print(f" נתיב מקור (קריאה): {par_dlk_source_path}")
             
-            if not os.path.exists(par_dlk_path):
-                print(f" שגיאה: קובץ par_dlk.dat לא נמצא ב-{par_dlk_path}")
-                print(f" וודא שהקובץ קיים בתיקייה")
+            # נתיב כתיבה - לתיקייה המקומית
+            par_dlk_output_path = os.path.join(config.DELEK_OUTPUT_PATH, "par_dlk.dat")
+            print(f" נתיב יעד (כתיבה): {par_dlk_output_path}")
+            
+            if not os.path.exists(par_dlk_source_path):
+                print(f"❌ שגיאה: קובץ par_dlk.dat לא נמצא ב-{par_dlk_source_path}")
+                print(f" וודא שהקובץ קיים בשרת")
                 return
             
-            print("✅ קובץ par_dlk.dat נמצא")
+            print("✅ קובץ par_dlk.dat נמצא במקור")
             
-            # קריאת הקובץ
-            print("📖 קורא את הקובץ...")
-            with open(par_dlk_path, 'r', encoding='cp862') as f:
+            # קריאת הקובץ מהמקור
+            print("📖 קורא את הקובץ מהשרת...")
+            with open(par_dlk_source_path, 'r', encoding='cp862') as f:
                 lines = f.readlines()
             
             if not lines:
@@ -1022,16 +1027,25 @@ class ModernFuelScraper:
                 sep = last_line[8]
                 new_line = sep.join(parts)
             
-            print(f"\n שורה חדשה שתתווסף:")
+            print(f"\n📝 שורה חדשה שתתווסף:")
             print(f"   {new_line}")
             
-            # הוספת השורה החדשה לסוף הקובץ
-            print("\n כותב לקובץ...")
-            with open(par_dlk_path, 'a', encoding='cp862') as f:
-                f.write('\n' + new_line)
+            # וידוא שהשורה האחרונה מסתיימת ב-newline
+            if lines and not lines[-1].endswith('\n'):
+                lines[-1] = lines[-1] + '\n'
+            
+            # הוספת השורה החדשה כשורה נפרדת
+            lines.append(new_line + '\n')
+            
+            # כתיבת הקובץ המעודכן לתיקייה היעד
+            print("\n💾 כותב קובץ מעודכן לתיקייה המקומית...")
+            print(f"   סה\"כ שורות בקובץ החדש: {len(lines)}")
+            with open(par_dlk_output_path, 'w', encoding='cp862') as f:
+                f.writelines(lines)
             
             print(f"\n✅✅✅ קובץ par_dlk.dat עודכן בהצלחה! ✅✅✅")
-            print(f"📁 מיקום: {par_dlk_path}")
+            print(f" נקרא מ: {par_dlk_source_path}")
+            print(f" נשמר ב: {par_dlk_output_path}")
             print("="*60 + "\n")
             
         except Exception as e:
