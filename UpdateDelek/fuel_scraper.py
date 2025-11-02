@@ -596,10 +596,11 @@ class ModernFuelScraper:
             if not fuel_data:
                 return
                 
-            # קבלת התאריך מהנתונים
-            date_from_data = fuel_data[0]['date']  # התאריך מהנתונים
-            # המרת התאריך לפורמט שם קובץ (dd-mm-yyyy)
-            date_for_filename = date_from_data.replace('/', '-')
+            # קבלת התאריך - תמיד ראשון לחודש הנוכחי
+            current_date = datetime.now()
+            date_from_data = f"01/{current_date.strftime('%m/%Y')}"  # תמיד 01
+            # המרת התאריך לפורמט שם קובץ עם מקפים (dd-mm-yy)
+            date_for_filename = f"01-{current_date.strftime('%m-%y')}"  # תמיד 01 עם מקפים
             
             # יצירת הנתיב המלא מקובץ הקונפיג
             base_path = config.DELEK_OUTPUT_PATH
@@ -652,10 +653,11 @@ class ModernFuelScraper:
             # נתיב ושם קובץ בסיס הנתונים מקובץ הקונפיג
             base_path = config.DELEK_OUTPUT_PATH
             
-            # יצירת שם קובץ עם התאריך (חודש ושנה)
-            date_from_data = fuel_data[0]['date']  # פורמט: dd/mm/yyyy
-            date_parts = date_from_data.split('/')
-            month_year = date_parts[1] + date_parts[2][2:]  # mmyy
+            # קבלת התאריך - תמיד ראשון לחודש הנוכחי
+            current_date = datetime.now()
+            month_year = current_date.strftime('%m%y')  # mmyy
+            date_for_db = f"01/{current_date.strftime('%m/%Y')}"  # 01/mm/yyyy
+            
             db_filename = f"kne{month_year}.mdb"
             db_file = os.path.join(base_path, db_filename)
             
@@ -670,7 +672,7 @@ class ModernFuelScraper:
             
             # יצירת מיפוי הנתונים לפי הסוגים שלנו
             data_mapping = {
-                'EffectiveDate': fuel_data[0]['date'],
+                'EffectiveDate': date_for_db,
                 'Benzin91': 0,
                 'Benzin96': 0,
                 'Benzin98': 0,  # יעודכן אם נמצא
@@ -943,10 +945,9 @@ class ModernFuelScraper:
             last_line = lines[-1].rstrip('\n\r')
             print(f"📄 שורה אחרונה בקובץ: {last_line[:50]}...")
             
-            # קבלת התאריך החדש - ראשון לחודש הנוכחי
-            date_from_data = fuel_data[0]['date']  # פורמט: dd/mm/yyyy
-            date_parts = date_from_data.split('/')
-            new_date = f"{date_parts[2][2:]}/{date_parts[1]}/01"  # yy/mm/01
+            # קבלת התאריך החדש - תמיד ראשון לחודש הנוכחי
+            current_date = datetime.now()
+            new_date = f"{current_date.strftime('%y')}/{current_date.strftime('%m')}/01"  # yy/mm/01
             
             # המרת מחירים לפורמט הקובץ (הסרת נקודה עשרונית, כפל ב-100)
             benzin98 = None
