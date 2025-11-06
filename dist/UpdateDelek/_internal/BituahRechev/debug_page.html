@@ -1,0 +1,529 @@
+<html class=" js flexbox canvas canvastext webgl no-touch geolocation postmessage no-websqldatabase no-indexeddb hashchange history draganddrop websockets rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms csstransforms3d csstransitions fontface video audio localstorage sessionstorage webworkers no-applicationcache svg inlinesvg smil svgclippaths"><head>
+    <!-- A-Web script -->
+    <script src="https://portal.mk-sense.com/aweb?license=06d4891233d143688121e05b9d7fed39" async=""></script>
+    <!------------------ -->
+
+
+    <meta charset="utf-8">
+    <base id="rootPath" href="https://car.cma.gov.il/">
+    <title></title>
+    <link href="/Content/Site.css?ver=4.0.0.5" rel="stylesheet" type="text/css">
+    <link href="/Content/layout.css?ver=4.0.0.5" rel="stylesheet" type="text/css">
+    <link href="/Content/calculate.css?ver=4.0.0.5" rel="stylesheet" type="text/css">
+    <link href="/Content/SafetySystemPopup.css?ver=4.0.0.5" rel="stylesheet" type="text/css">
+
+    <script src="/Scripts/jquery-1.7.2.min.js?ver=4.0.0.5" type="text/javascript"></script>
+    <script src="/Scripts/modernizr-1.7.min.js?ver=4.0.0.5" type="text/javascript"></script>
+    <script src="/Scripts/Layout.js?ver=4.0.0.5" type="text/javascript"></script>
+    <script src="/Scripts/Calculate.js?ver=4.0.0.5" type="text/javascript"></script>
+    <script src="/Scripts/jquery.ui.datepicker-he.js?ver=4.0.0.5" type="text/javascript"></script>
+</head>
+
+<body style="font-size: 12px;">
+    <div id="backgroundDiv" style="display:none"></div>
+    <div id="dialog" class="safetyPopupWindow" style="display:none"></div>
+    <div class="page">
+      
+            <header>
+           
+            <nav id="header_page" class="header_page" style="font-size: 16px;">     
+                <ul id="menu">   
+    <li id="li-1-nav" class="nav-SelectMe " selectedpage="1"><a id="a-li-1" href="/Home/Index?next_page=1&amp;curr_page=2" class=" a-without-img-1">
+        <span class="">מידע כללי</span>
+    </a></li>
+<li>|</li>    <li id="li-2-nav" class="nav-SelectMe " selectedpage="2"><a id="a-li-2" href="/Parameters/Get?next_page=2&amp;curr_page=2" class="a-without-img-2 a-active">
+        <span class="">מחשבון ביטוח</span>
+    </a></li>
+<li>|</li>    <li id="li-4-nav" class="nav-SelectMe " selectedpage="4"><a id="a-li-4" href="/Glossary/Index?next_page=4&amp;curr_page=2" class=" a-without-img-4"> 
+        <span class="">מילון מונחים</span>
+    </a></li>
+<li>|</li>    <li id="li-5-nav" class="nav-SelectMe " selectedpage="5"><a id="a-li-5" href="/Reports/Index?next_page=5&amp;curr_page=2" class=" a-without-img-5">
+         <span class="">מידע נוסף</span>
+    </a></li>
+ </ul>
+                <a href="https://www.youtube.com/user/mofisrael/featured" style="text-decoration:none;" title="יוטיוב" target="_blank"><span class="youtube-white fRight"></span></a>
+                <a href="https://www.linkedin.com/company/israel-ministry-of-finance" style="text-decoration:none;" title="לינקדין" target="_blank"><span class="linkedin-white fRight"></span></a>
+                <a href="https://www.facebook.com/Israeli.Ministry.of.Finance" style="text-decoration:none;" title="פייסבוק" target="_blank"><span class="facebook-white fRight"></span></a>
+                <a href="https://twitter.com/israel_mof" style="text-decoration:none;" title="טוויטר" target="_blank"><span class="twitter-white fRight"></span></a>
+                <div id="div-changeSize" class="changeSize">
+                    <input type="button" id="change_size_small" class="change_size_small" title="להגדלה / הקטנה של הטקסט" style="font-size: 12px;">
+                    <input type="button" id="change_size_big" class="change_size_big" title="להגדלה / הקטנה של הטקסט" style="font-size: 12px;">
+                    <input type="button" id="change_size_huge" class="change_size_huge" title="להגדלה / הקטנה של הטקסט" style="font-size: 12px;">   
+                    <input type="button" id="play_pause" class="pause" title="להפעלה / הפסקה של האנימציות" style="font-size: 12px;">   
+                    <a id="a_jumpToTopOfBody" class="a_jump" title="דלג לתוכן העמוד">דלג לתוכן העמוד</a>
+                </div>             
+            </nav>
+            
+           
+
+            <div id="div-main_header" style="height:356px;padding:0;background-color:#7f786a; ">
+
+                
+                <a id="shukhonCloud" href="https://www.gov.il/he/departments/capital_market_authority" title="לאתר רשות שוק ההון ביטוח וחסכון" target="_new"></a>
+                <a id="safetySystemBanner" title="לבאנר מערכות הבטיחות" style="display: none;">לבאנר מערכות הבטיחות</a>
+                <div id="div-mainframeleft" class="mainframeleft"></div>
+                <div id="div-mainframeright" class="mainframeright"></div>
+                <div id="div-panorama" class="div-panorama" style="background-image: url(&quot;https://car.cma.gov.il//Content/car_theme/images/panorama/2.jpg&quot;); opacity: 1;"></div>
+
+                <img id="img-road" class="road" src="/Content/car_theme/images/road/road_top.png" alt="">
+                
+
+                
+                <a href="/Parameters/Get?next_page=2&amp;curr_page=2">
+                    <img id="img-car" src="/Content/car_theme/images/people%20and%20stuff/car.png" alt="למחשבון הביטוח" title="למחשבון הביטוח" style="left: 245px; opacity: 1;">
+                </a>
+                <img id="img-bubble" class="bubble hide" src="" alt="">
+                <div id="div-person"> <img id="img-person" src="https://car.cma.gov.il//Content/car_theme/images/people%20and%20stuff/person-2.png" alt="" style="left: 75px; top: 150px; display: inline;"> </div>
+                
+                <ul id="img-Menu">   
+    <li id="li-1-nav" class="nav-SelectMe nav-selectMe-height" selectedpage="1"><a id="a-li-1" href="/Home/Index?next_page=1&amp;curr_page=2" class="nav-selectMe-height nav-1">
+        <span class="hide">מידע כללי</span>
+    </a></li>
+    <li id="li-2-nav" class="nav-SelectMe nav-selectMe-height" selectedpage="2"><a id="a-li-2" href="/Parameters/Get?next_page=2&amp;curr_page=2" class="nav-selectMe-height nav-2 nav-2-selected">
+        <span class="hide">מחשבון ביטוח</span>
+    </a></li>
+    <li id="li-4-nav" class="nav-SelectMe nav-selectMe-height" selectedpage="4"><a id="a-li-4" href="/Glossary/Index?next_page=4&amp;curr_page=2" class="nav-selectMe-height nav-4"> 
+        <span class="hide">מילון מונחים</span>
+    </a></li>
+    <li id="li-5-nav" class="nav-SelectMe nav-selectMe-height" selectedpage="5"><a id="a-li-5" href="/Reports/Index?next_page=5&amp;curr_page=2" class="nav-selectMe-height nav-5">
+         <span class="hide">מידע נוסף</span>
+    </a></li>
+ </ul>
+                <img id="img-navShadow" src="/Content/car_theme/images/navigation/shadow_bar_nivut.png" alt="">
+
+
+                
+            </div>
+         
+        </header>
+     
+        <section>
+             
+          <div id="div-yellowframe_top" class="yellowframe_top"> </div> 
+            <div id="content">       
+              
+                <div id="contentInner" class="ContentInner">
+                    
+                    <img id="ribbons" class="ribbons" src="https://car.cma.gov.il//Content/car_theme/images/ribbons/2_header.gif" alt="">  
+                    
+
+
+            <img class="all_fields_required" src="/Content/car_theme/images/icons/all_fields_required.gif" alt="">
+            <div id="parametersToCalculate" class="marginTop12">
+
+ 
+
+<form action="/Parameters/Calculate" id="myForm" method="post">        <input name="hdnForCaptcha" type="hidden" value="" style="font-size: 12px;">
+        <div id="div-1-title" class="title"><label class="header1 Blue" style="font-size: 16px;">פרטי הרכב</label></div>
+        <div id="parameters">
+          <div class="parameter-line1">             
+                <div class="sheet_name">
+                    <div class="fRight  paddingLeft5"><label class="verticalTop boldtext ">סוג רכב</label> </div>                       
+                    <div><select class="value-horizontal" id="ddlSheets" name="sheet_id" style="font-size: 12px;"><option selected="selected" value="1">רכב פרטי</option>
+<option value="2">אופנוע</option>
+<option value="3">אוטובוס/טיולית</option>
+<option value="4">מונית</option>
+<option value="5">רכב מסחרי</option>
+<option value="7">רכב מיוחד</option>
+</select></div>
+                 </div>
+                <div class="owner">
+                        <div class="fRight verticalTop paddingLeft5"><label class="verticalTop boldtext">סוג בעלות</label></div> 
+                        <div><select class="value-horizontal " id="code_owner" name="code_owner" style="font-size: 12px;"><option selected="selected" value="1001">בעלות פרטית</option>
+<option value="1002">בעלות אחרת</option>
+</select></div> 
+                </div> 
+                <div class="insurance_date directionLtr">
+                    <div class="fRight verticalTop paddingLeft5"><label class="verticalTop boldtext">ת. תחילת ביטוח</label></div> 
+                     <div><img class="ui-datepicker-trigger" src="https://car.cma.gov.il//Content/car_theme/images/icons/calender.gif" alt="בחר תאריך" title="בחר תאריך"><input class="date hasDatepicker" id="insurance_date" maxlength="10" name="insurance_date" type="text" value="01/09/2025" style="font-size: 12px; width: 70px;">  </div>           
+                </div>
+                <div class="fLeft">
+
+                  
+                     
+                </div>
+            </div>
+          <div class="clear spacedLine">
+                    <div id="div-2-title" class="title">
+ <a class="underline Blue link " id="jumpToFooterOfBody"><label class="header1 Blue" style="font-size: 16px;"> הנהג הצעיר ביותר הצפוי להשתמש ברכב</label></a>                                                                     </div>
+                    <div>
+                        
+          
+
+
+ <div class="div-parameter-horizontal-radio">
+    <div class="div-parameterTitle-horizontal-radio ">
+        <label class="boldtext">מין הנהג</label>
+    </div>
+    <div class="div-parameterValue-horizontal-radio paddingTop3">
+        <input type="hidden" name="parameters[0].parameter" value="D" style="font-size: 12px;">
+                                <input type="radio" name="parameters[0].value" id="categories[j].category_id" value="1" class="radio" style="font-size: 12px;"> 
+                        <label>נהג</label>
+                        <input type="radio" name="parameters[0].value" id="categories[j].category_id" value="2" class="radio" style="font-size: 12px;"> 
+                        <label>נהגת</label>
+     </div>
+ </div>           
+
+          
+
+
+ <div class="div-parameter-horizontal">
+    <div class="div-parameterTitle-horizontal ">
+        <label class="boldtext">גיל הנהג</label>
+    </div>
+    <div class="div-parameterValue-horizontal paddingTop3">
+        <input type="hidden" name="parameters[1].parameter" value="D2" style="font-size: 12px;">
+        <input class="int-number OneParameter" id="D2" maxlength="3" name="parameters[1].value" pattern="\d*" placeholder="הקלד גיל" type="text" value="" style="font-size: 12px;">     </div>
+ </div>           
+
+          
+
+
+ <div class="div-parameter-horizontal">
+    <div class="div-parameterTitle-horizontal ">
+        <label class="boldtext">מספר שנות רישוי</label>
+    </div>
+    <div class="div-parameterValue-horizontal paddingTop3">
+        <input type="hidden" name="parameters[2].parameter" value="E" style="font-size: 12px;">
+        <input class="int-number OneParameter" id="E" maxlength="3" name="parameters[2].value" pattern="\d*" placeholder="הקלד ותק" type="text" value="" style="font-size: 12px;">     </div>
+ </div>           
+
+        <div id="div-explanation" class="explanation-ShowIcon  paddingTop3 ">
+        
+ <div id="div-expPanel" class="tooltipIcon-Normal" title="להצגת עזרה במילוי השדה"></div>             <div id="div-expContent" class="fRight92 hide">
+                
+                <div class="toltip-Normal-Top"></div>
+                <div class="toltip-Normal-Middle">
+                    <div class="paddingRight25 paddingLeft5"><label id="explanationDescription-E"><b>מספר השנים</b> בהן היה הנהג הצעיר ביותר הצפוי לנהוג ברכב, מורשה לנהוג ברכב מאותו הסוג בישראל</label></div>
+                </div> 
+                 <div class="toltip-Normal-Bottom"></div>                   
+            </div>
+        </div> 
+        <div class="clear"></div>
+
+                    </div>
+                    <div id="div-2-title" class="title">
+ <a class="underline Blue link " id="jumpToFooterOfBody"><label class="header1 Blue" style="font-size: 16px;"> נהגים הצפויים להשתמש ברכב</label></a>                                                                     </div>
+                    <div>
+                        
+          
+
+
+ <div class="div-parameter-vertical">
+    <div class="div-parameterTitle-vertical ">
+        <label class="boldtext">מספר תאונות של הנהגים הצפויים לנהוג ברכב</label>
+    </div>
+    <div class="div-parameterValue-vertical paddingTop3">
+        <input type="hidden" name="parameters[3].parameter" value="F" style="font-size: 12px;">
+        <input class="int-number OneParameter" id="F" maxlength="2" name="parameters[3].value" pattern="\d*" placeholder="הקלד מספר תאונות, במידה ואין הקלד 0" type="text" value="0" style="font-size: 12px;">     </div>
+ </div>           
+
+        <div id="div-explanation" class="explanation-ShowIcon  paddingTop3 ">
+        
+ <div id="div-expPanel" class="tooltipIcon-Normal" title="להצגת עזרה במילוי השדה"></div>             <div id="div-expContent" class="fRight92 hide">
+                
+                <div class="toltip-Normal-Top"></div>
+                <div class="toltip-Normal-Middle">
+                    <div class="paddingRight25 paddingLeft5"><label id="explanationDescription-F"><b>מספר התאונות </b>שהביאו לתביעה בהתאם לחוק פיצויים לנפגעי תאונות דרכים, התשל'ה - 1975. בקביעת מספר התאונות, יכללו כל התאונות שאירעו בשלוש השנים שקדמו לתאריך תחילת הפוליסה, בעת שכלי רכב מאותו סוג היה נהוג בידי אחד מן הנהגים הצפויים לנהוג ברכב (הן אם הרכב היה בבעלות פרטית והן אם בבעלות אחרת)</label></div>
+                </div> 
+                 <div class="toltip-Normal-Bottom"></div>                   
+            </div>
+        </div> 
+        <div class="clear"></div>
+          
+
+
+ <div class="div-parameter-vertical">
+    <div class="div-parameterTitle-vertical ">
+        <label class="boldtext">מספר פסילות רישיון</label>
+    </div>
+    <div class="div-parameterValue-vertical paddingTop3">
+        <input type="hidden" name="parameters[4].parameter" value="G" style="font-size: 12px;">
+        <input class="int-number OneParameter" id="G" maxlength="2" name="parameters[4].value" pattern="\d*" placeholder="הקלד מספר הרשעות, במידה ואין הקלד 0" type="text" value="0" style="font-size: 12px;">     </div>
+ </div>           
+
+        <div id="div-explanation" class="explanation-ShowIcon  paddingTop3 ">
+        
+ <div id="div-expPanel" class="tooltipIcon-Normal" title="להצגת עזרה במילוי השדה"></div>             <div id="div-expContent" class="fRight92 hide">
+                
+                <div class="toltip-Normal-Top"></div>
+                <div class="toltip-Normal-Middle">
+                    <div class="paddingRight25 paddingLeft5"><label id="explanationDescription-G"><b>מספר פסילות הרישיון</b> שאירעו בשלוש השנים שקדמו לתאריך תחילת הפוליסה, לפי קביעת בית משפט, קצין משטרה או רשות רישוי, למעט ביטול הפסילה על ידי בית משפט, פסילה עקב כשרות רפואית לקויה ופסילות המשך אשר נבעו מאותו מקרה. מספר הפסילות ימנה <b>לכל הנהגים הצפויים לנהוג ברכב</b> בשל נהיגת רכב מאותו הסוג (הן אם הרכב היה בבעלות פרטית והן אם בבעלות אחרת)</label></div>
+                </div> 
+                 <div class="toltip-Normal-Bottom"></div>                   
+            </div>
+        </div> 
+        <div class="clear"></div>
+
+                    </div>
+                    <div id="div-2-title" class="title">
+<label class="header1 Blue" style="font-size: 16px;"> מאפייני הרכב &nbsp;</label>                                                <a class="blue" href="http://car.mot.gov.il/index.php?option=com_carmodels&amp;view=carmodels&amp;Itemid=30" target="_blank">(לפירוט מאפייני כלי רכב פרטי מסחרי עד 3.5 טון - קישור לאתר משרד התחבורה)</a><br>                    </div>
+                    <div>
+                        
+          
+
+
+ <div class="div-parameter-vertical-n">
+    <div class="div-parameterTitle-vertical-n ">
+        <label class="boldtext">סוג דלק</label>
+    </div>
+    <div class="div-parameterValue-vertical-n paddingTop3">
+        <input type="hidden" name="parameters[5].parameter" value="N" style="font-size: 12px;">
+        <select class="OneParameter" id="N" name="parameters[5].value" placeholder="" style="font-size: 12px;"><option selected="selected" value="1">בנזין</option>
+<option value="2">משולב גז בנזין</option>
+<option value="3">משולב חשמל בנזין</option>
+<option value="4">גז</option>
+<option value="5">דיזל</option>
+<option value="6">חשמלי</option>
+</select>     </div>
+ </div>           
+
+          
+
+
+ <div class="div-parameter-vertical">
+    <div class="div-parameterTitle-vertical ">
+        <label class="boldtext">נפח מנוע (בסמ"ק)</label>
+    </div>
+    <div class="div-parameterValue-vertical paddingTop3">
+        <input type="hidden" name="parameters[6].parameter" value="A" style="font-size: 12px;">
+        <input class="int-number OneParameter" id="A" maxlength="4" name="parameters[6].value" pattern="\d*" placeholder="הקלד נפח מנוע" type="text" value="1600" style="font-size: 12px;">     </div>
+ </div>           
+
+          
+
+
+ <div class="div-parameter-vertical">
+    <div class="div-parameterTitle-vertical ">
+        <label class="boldtext">כוחות סוס</label>
+    </div>
+    <div class="div-parameterValue-vertical paddingTop3">
+        <input type="hidden" name="parameters[7].parameter" value="O" style="font-size: 12px;">
+        <input class="int-number OneParameter" id="O" maxlength="3" name="parameters[7].value" pattern="\d*" placeholder="הקלד כוחות סוס" type="text" value="100" style="font-size: 12px;">     </div>
+ </div>           
+
+          
+
+
+ <div class="div-parameter-vertical-radio">
+    <div class="div-parameterTitle-vertical-radio ">
+        <label class="boldtext">מערכת למניעת נעילת גלגלים (ABS)</label>
+    </div>
+    <div class="div-parameterValue-vertical-radio paddingTop3">
+        <input type="hidden" name="parameters[8].parameter" value="J" style="font-size: 12px;">
+                                <input type="radio" name="parameters[8].value" id="categories[j].category_id" value="1" checked="checked" class="radio" style="font-size: 12px;"> 
+                        <label>קיימת</label>
+                        <input type="radio" name="parameters[8].value" id="categories[j].category_id" value="2" class="radio" style="font-size: 12px;"> 
+                        <label>לא קיימת</label>
+     </div>
+ </div>           
+
+          
+
+
+ <div class="div-parameter-vertical-radio">
+    <div class="div-parameterTitle-vertical-radio ">
+        <label class="boldtext">מערכת לבקרת יציבות (ESP)</label>
+    </div>
+    <div class="div-parameterValue-vertical-radio paddingTop3">
+        <input type="hidden" name="parameters[9].parameter" value="K" style="font-size: 12px;">
+                                <input type="radio" name="parameters[9].value" id="categories[j].category_id" value="1" checked="checked" class="radio" style="font-size: 12px;"> 
+                        <label>קיימת</label>
+                        <input type="radio" name="parameters[9].value" id="categories[j].category_id" value="2" class="radio" style="font-size: 12px;"> 
+                        <label>לא קיימת</label>
+     </div>
+ </div>           
+
+          
+
+
+ <div class="div-parameter-vertical">
+    <div class="div-parameterTitle-vertical ">
+        <label class="boldtext">מספר כריות אויר ברכב</label>
+    </div>
+    <div class="div-parameterValue-vertical paddingTop3">
+        <input type="hidden" name="parameters[10].parameter" value="H" style="font-size: 12px;">
+        <input class="int-number OneParameter" id="H" maxlength="2" name="parameters[10].value" pattern="\d*" placeholder="" type="text" value="4" style="font-size: 12px;">     </div>
+ </div>           
+
+          
+
+
+ <div class="div-parameter-vertical-radio">
+    <div class="div-parameterTitle-vertical-radio ">
+        <label class="boldtext">מערכת התרעה על אי שמירת מרחק (FCW)</label>
+    </div>
+    <div class="div-parameterValue-vertical-radio paddingTop3">
+        <input type="hidden" name="parameters[11].parameter" value="L" style="font-size: 12px;">
+                                <input type="radio" name="parameters[11].value" id="categories[j].category_id" value="1" class="radio" style="font-size: 12px;"> 
+                        <label>קיימת</label>
+                        <input type="radio" name="parameters[11].value" id="categories[j].category_id" value="2" checked="checked" class="radio" style="font-size: 12px;"> 
+                        <label>לא קיימת</label>
+     </div>
+ </div>           
+
+        <div id="div-explanation" class="explanation-ShowIcon  paddingTop3 ">
+        
+ <div id="div-expPanel" class="tooltipIcon-Normal" title="להצגת עזרה במילוי השדה"></div>             <div id="div-expContent" class="fRight92 hide">
+                
+                <div class="toltip-Normal-Top"></div>
+                <div class="toltip-Normal-Middle">
+                    <div class="paddingRight25 paddingLeft5"><label id="explanationDescription-L">מערכת בגינה ניתנה הנחה:<br>  1. מערכת המשווקת על ידי חברת AWACS, מתוצרת Safe Drive Systems, דגם Radar RD-140 <br>  2. מערכת המשווקת על ידי חברת AWACS, מתוצרת Safe Drive Systems, דגם CM-107 <br>  3. מערכות המיוצרות על ידי חברת מובילאיי טכנולוגיות ראיה בע"מ (MOBILEYE), סדרות 5 ו-6.<br>  4. מערכת המיוצרת על ידי חברת ,MOVON דגם LF/3LF+3-MDAS, משווקת ע"י א.ד.י מערכות סטריאו לרכב בע"מ.<br></label></div>
+                </div> 
+                 <div class="toltip-Normal-Bottom"></div>                   
+            </div>
+        </div> 
+        <div class="clear"></div>
+          
+
+
+ <div class="div-parameter-vertical-radio">
+    <div class="div-parameterTitle-vertical-radio ">
+        <label class="boldtext">מערכת התרעה על סטיה מנתיב (LDW)</label>
+    </div>
+    <div class="div-parameterValue-vertical-radio paddingTop3">
+        <input type="hidden" name="parameters[12].parameter" value="M" style="font-size: 12px;">
+                                <input type="radio" name="parameters[12].value" id="categories[j].category_id" value="1" class="radio" style="font-size: 12px;"> 
+                        <label>קיימת</label>
+                        <input type="radio" name="parameters[12].value" id="categories[j].category_id" value="2" checked="checked" class="radio" style="font-size: 12px;"> 
+                        <label>לא קיימת</label>
+     </div>
+ </div>           
+
+        <div id="div-explanation" class="explanation-ShowIcon  paddingTop3 ">
+        
+ <div id="div-expPanel" class="tooltipIcon-Normal" title="להצגת עזרה במילוי השדה"></div>             <div id="div-expContent" class="fRight92 hide">
+                
+                <div class="toltip-Normal-Top"></div>
+                <div class="toltip-Normal-Middle">
+                    <div class="paddingRight25 paddingLeft5"><label id="explanationDescription-M">מערכת בגינה ניתנה הנחה:<br>  1. מערכת המשווקת על ידי חברת AWACS, מתוצרת Safe Drive Systems, דגם Radar RD-140 <br>  2. מערכת המשווקת על ידי חברת AWACS, מתוצרת Safe Drive Systems, דגם CM-107 <br>  3. מערכות המיוצרות על ידי חברת מובילאיי טכנולוגיות ראיה בע"מ (MOBILEYE), סדרות 5 ו-6.<br>  4. מערכת המיוצרת על ידי חברת ,MOVON דגם LF/3LF+3-MDAS, משווקת ע"י א.ד.י מערכות סטריאו לרכב בע"מ.<br></label></div>
+                </div> 
+                 <div class="toltip-Normal-Bottom"></div>                   
+            </div>
+        </div> 
+        <div class="clear"></div>
+          
+
+
+ <div class="div-parameter-vertical">
+    <div class="div-parameterTitle-vertical ">
+        <label class="boldtext">שימוש הרכב</label>
+    </div>
+    <div class="div-parameterValue-vertical paddingTop3">
+        <input type="hidden" name="parameters[13].parameter" value="B" style="font-size: 12px;">
+        <select class="OneParameter" id="B" name="parameters[13].value" placeholder="" style="font-size: 12px;"><option value="1">לימוד נהיגה</option>
+<option value="2">רכב אספנות</option>
+<option value="3">השכרה לתקופה של שנה ומעלה</option>
+<option value="4">השכרה לתקופה הקצרה משנה</option>
+<option selected="selected" value="6">רגיל</option>
+</select>     </div>
+ </div>           
+
+
+                    </div>
+
+            </div>
+            
+        </div>
+        <br><br><br>
+        <div class="dots">&nbsp;</div>
+
+
+<div id="ParametersRemarks"><content>
+  <div class="clear">
+    <b>נהג הצפוי להשתמש ברכב-</b>
+    <br>
+    <span class="remarkstext" style="font-size: 11px;">
+            נהג שיש לו גישה לרכב וצפוי שינהג בו מעת לעת.
+            <br>
+            אדם המשתמש ברכב באורח חד-פעמי, אינו אדם הצפוי להשתמש ברכב.
+        </span>
+  </div>
+  <br>
+  <div class="dots"></div>
+  <div class="clear">
+    <b>תעריף לרכב מסחרי עד 3.5 טון</b>
+    <br>
+    <span class="remarkstext" style="font-size: 11px;">
+          תעריפי הביטוח לרכב פרטי ומסחרי עד 3.5 טון בחברות להלן הינם זהים:<br>
+          1.      הפול - המאגר לביטוח שיורי<br>
+          2.      הפניקס חברה לביטוח בע"מ<br>
+          3.      כלל חברה לביטוח בע"מ<br>
+          4.      מגדל חברה לביטוח בע"מ<br>
+		  5.      הראל חברה לביטוח בע"מ (כולל שירביט מבית הראל)<br>
+          6.	  ווישור חברה לביטוח בע"מ<br>
+		  7.	  הכשרה חברה לביטוח בע"מ<br>
+          להצגת תעריף ביטוח בחברות הנ"ל לרכב מסחרי עד 3.5 טון יש לבחור בסוג הרכב: רכב פרטי.
+        </span>
+  </div>
+  <br>
+  <div class="dots"></div>
+</content></div>
+
+
+<script type="text/javascript">
+    $(document).ready()
+    {
+        var remarksDiv = $('#ParametersRemarks');
+        
+        $.ajax({
+            url:GetPath("/Parameters/GetXmlParametersRemarks"),
+            type: "GET",
+            cache: false, //חשוב מאד!
+            success: function (data) {
+                remarksDiv.html(data);
+                            }
+        });
+
+    };
+</script>
+
+            <div class="clear">
+        
+       
+          <div class="fLeft">
+            
+              <input type="button" id="press_to_compare" onclick="this.form.submit();" title="לחץ להשוואת תעריפים" style="font-size: 12px;">
+          </div>
+    </div>
+</form><script src="/Scripts/Expander.js?ver=4.0.0.5" type="text/javascript"></script>
+<script src="/Scripts/Calculate.js?ver=4.0.0.5" type="text/javascript"></script>
+
+<script type="text/javascript">
+    $(document).ready(initCalculate)
+   
+</script>
+             </div>      
+<input id="reloadValue" type="hidden" name="reloadValue" value="1755772975901" style="font-size: 12px;">            
+                </div> 
+              
+            </div>
+          <div id="div-yellowframe_bt" class="yellowframe_bt"></div>
+           
+        </section>
+        
+        <footer>
+           <a id="ozarIcon" href="https://www.gov.il/" title="לאתר פורטל השרותים והמידע הממשלתי" target="_new"></a>
+           <div class="fright70 paddingtop20">
+            
+           </div> 
+        </footer>
+        
+    </div>
+
+    
+    <link rel="Shortcut Icon" href="/Content/car_theme/images/icons/car_favicon.ico" type="image/x-icon" title="מחשבון ביטוח רכב חובה">
+    <script src="/Scripts/jquery.unobtrusive-ajax.min.js?ver=4.0.0.5" type="text/javascript"></script>
+    <script src="/Scripts/jquery.tablesorter.min.js?ver=4.0.0.5" type="text/javascript"></script>
+    <script src="/Scripts/jquery-ui-1.8.11.min.js?ver=4.0.0.5" type="text/javascript"></script>
+    
+    
+    
+    <link href="/Content/themes/base/jquery-ui-1.8.21.custom.css?ver=4.0.0.5" rel="stylesheet" type="text/css">
+    <script src="/Scripts/linq.min.js?ver=4.0.0.5" type="text/javascript"></script>
+    <!-- Accessibility - car.cma.gov.il (SSL)-->
+    <!-- Paste the following code above </body> tag -->
+    
+ 
+
+<div id="ui-datepicker-div" class="ui-datepicker ui-widget ui-widget-content ui-helper-clearfix ui-corner-all"></div><div dir="rtl" class="tooltip" id="tooltip0"><p>לקבלת תעריפי הביטוח יש למלא את כל הפרמטרים בדף, לקבלת הסבר על מילוי פרמטר מסויים יש ללחוץ על האייקון ? ליד הפרמטר</p></div></body></html>

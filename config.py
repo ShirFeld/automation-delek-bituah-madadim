@@ -122,6 +122,13 @@ def get_delek_mdb_path(day, month, year):
     filename = DELEK_MDB_FILENAME_FORMAT.format(day=day, month=month, year=year % 100)
     return os.path.join(DELEK_OUTPUT_PATH, filename)
 
+
+"""
+אם תרצה להעביר את התוכנה למקום אחר, העתק את כל תיקיית UpdateDelek (לא רק את ה-EXE)
+התיקייה _internal חייבת להישאר לצד ה-EXE
+"""
+
+
 # ===================================
 # הרצת בדיקות בעת טעינת הקובץ
 # ===================================
