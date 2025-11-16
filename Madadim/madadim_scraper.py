@@ -499,6 +499,11 @@ class MadadimScraper:
                 EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
             )
             month_link = month_containers[1].find_element(By.CSS_SELECTOR, f"ul li a[title='{prev_month}']")
+            
+            # גלילה לאלמנט כדי שיהיה גלוי
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", month_link)
+            time.sleep(0.5)
+            
             month_link.click()
             print(f"OK נבחר חודש {prev_month}")
             time.sleep(1)
