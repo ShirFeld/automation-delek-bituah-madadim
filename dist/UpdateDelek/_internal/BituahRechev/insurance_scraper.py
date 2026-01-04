@@ -364,19 +364,19 @@ class InsuranceScraper:
                 print(f"שגיאה ביצירת תיקייה: {e}")
                 return None
             
-            # תאריך עתידי - לשימוש בתוך הטבלה
+            # תאריך עתידי - לשימוש בתוך הטבלה ולשם הקובץ (החודש הבא)
             next_month = (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1)
+            target_month_code = next_month.strftime('%m%y')
             
-            # תאריך נוכחי - לשם הקובץ
-            current_month = datetime.now()
-            image_path = os.path.join(save_path, f"{current_month.strftime('%m%y')}.jpg")
+            # שם קובץ לפי החודש הבא
+            image_path = os.path.join(save_path, f"{target_month_code}.jpg")
             
             # מחיקת קובץ קיים אם קיים
             if os.path.exists(image_path):
                 os.remove(image_path)
                 print(f"🗑️ מחק קובץ תמונה קיים: {image_path}")
             
-            print(f"📁 שם קובץ תמונה: {current_month.strftime('%m%y')}.jpg (חודש נוכחי)")
+            print(f"📁 שם קובץ תמונה: {target_month_code}.jpg (חודש הבא)")
             print(f"📅 תאריך בטבלה: {next_month.strftime('%d/%m/%Y')} (חודש עתידי)")
             
             tables = prepare_all_tables_data(next_month.strftime('%d/%m/%Y'), insurance_data or {})
