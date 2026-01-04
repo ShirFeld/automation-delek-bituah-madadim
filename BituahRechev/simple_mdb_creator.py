@@ -41,26 +41,27 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
             print(f"❌ שגיאה ביצירת תיקייה: {e}")
             return None
         
-        # יצירת שם הקובץ - פורמט kneMMYY (מבוסס על החודש הנוכחי)
-        if mdb_filename:
-            mdb_path = os.path.join(save_path, mdb_filename)
-            month_year = mdb_filename.replace('kne', '').replace('.mdb', '')
-        else:
-            # שם הקובץ לפי החודש הנוכחי
-            current_date = datetime.now()
-            month_year = current_date.strftime("%m%y")  # MMYY של חודש נוכחי
-            mdb_path = os.path.join(save_path, f"kne{month_year}.mdb")
-        
-        # תאריך יעיל - הראשון לחודש הבא (לתוך הטבלה)
+        # קביעת חודש היעד - תמיד החודש הבא (תואם לתאריך היעיל בטבלה)
         current_date = datetime.now()
         if current_date.month == 12:
             next_month = datetime(current_date.year + 1, 1, 1)
         else:
             next_month = datetime(current_date.year, current_date.month + 1, 1)
+        target_month_year = next_month.strftime("%m%y")  # MMYY של החודש הבא
+        
+        # יצירת שם הקובץ - פורמט kneMMYY (מבוסס על החודש הבא)
+        if mdb_filename:
+            mdb_path = os.path.join(save_path, mdb_filename)
+            month_year = mdb_filename.replace('kne', '').replace('.mdb', '')
+        else:
+            month_year = target_month_year
+            mdb_path = os.path.join(save_path, f"kne{month_year}.mdb")
+        
+        # תאריך יעיל - הראשון לחודש הבא (לתוך הטבלה)
         effective_date = next_month.strftime("%d/%m/%Y")  # פורמט ישראלי: DD/MM/YYYY
         
         print(f"📅 תאריך נוכחי: {current_date.strftime('%d/%m/%Y')}")
-        print(f"📁 שם קובץ: kne{month_year}.mdb (חודש נוכחי)")
+        print(f"📁 שם קובץ: kne{month_year}.mdb (חודש הבא)")
         print(f"🗓️ תאריך יעיל בטבלה: {effective_date} (חודש עתידי)")
         
         print(f"📅 יוצר קובץ נתונים: {os.path.basename(mdb_path)}")
@@ -224,9 +225,14 @@ def create_sqlite_file(save_path, month_year, effective_date, insurance_data, md
             
             # הכנסת נתונים לטבלה 1 - רק אם יש נתונים אמיתיים
             if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
+                # המרת None ל-NULL ב-SQL
+                nigrar_sql = 'NULL' if nigrar_value is None else str(nigrar_value)
+                handasi_sql = 'NULL' if handasi_value is None else str(handasi_value)
+                agricalture_sql = 'NULL' if agricalture_value is None else str(agricalture_value)
+                
                 insert1_sql = f"""
                 INSERT INTO tblBituachHova_edit (EffectiveDate, Nigrar, Handasi, Agricalture)
-                VALUES ('{effective_date}', {nigrar_value}, {handasi_value}, {agricalture_value})
+                VALUES ('{effective_date}', {nigrar_sql}, {handasi_sql}, {agricalture_sql})
                 """
                 access_app.DoCmd.RunSQL(insert1_sql)
                 print("✅ הכניס נתונים לטבלה 1")
@@ -597,10 +603,15 @@ def create_real_access_mdb(mdb_path, effective_date, insurance_data):
             
             # הכנסת נתונים לטבלה 1 - רק אם יש נתונים אמיתיים
             if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
+                # המרת None ל-NULL ב-SQL
+                nigrar_sql = 'NULL' if nigrar_value is None else str(nigrar_value)
+                handasi_sql = 'NULL' if handasi_value is None else str(handasi_value)
+                agricalture_sql = 'NULL' if agricalture_value is None else str(agricalture_value)
+                
                 insert1_sql = f"""
                 INSERT INTO tblBituachHova_edit 
                 (EffectiveDate, Nigrar, Handasi, Agricalture)
-                VALUES ('{effective_date}', {nigrar_value}, {handasi_value}, {agricalture_value})
+                VALUES ('{effective_date}', {nigrar_sql}, {handasi_sql}, {agricalture_sql})
                 """
                 access_app.DoCmd.RunSQL(insert1_sql)
                 print("✅ הכניס נתונים לטבלה 1")

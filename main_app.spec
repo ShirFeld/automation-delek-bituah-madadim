@@ -49,7 +49,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='UpdateDelek',
+    name='Automation_KolNatun',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -71,6 +71,6 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='UpdateDelek',
+    name='Automation_KolNatun',
 )
 
