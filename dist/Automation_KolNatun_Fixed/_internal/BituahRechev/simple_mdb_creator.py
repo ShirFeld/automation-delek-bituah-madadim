@@ -225,9 +225,14 @@ def create_sqlite_file(save_path, month_year, effective_date, insurance_data, md
             
             # הכנסת נתונים לטבלה 1 - רק אם יש נתונים אמיתיים
             if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
+                # המרת None ל-NULL ב-SQL
+                nigrar_sql = 'NULL' if nigrar_value is None else str(nigrar_value)
+                handasi_sql = 'NULL' if handasi_value is None else str(handasi_value)
+                agricalture_sql = 'NULL' if agricalture_value is None else str(agricalture_value)
+                
                 insert1_sql = f"""
                 INSERT INTO tblBituachHova_edit (EffectiveDate, Nigrar, Handasi, Agricalture)
-                VALUES ('{effective_date}', {nigrar_value}, {handasi_value}, {agricalture_value})
+                VALUES ('{effective_date}', {nigrar_sql}, {handasi_sql}, {agricalture_sql})
                 """
                 access_app.DoCmd.RunSQL(insert1_sql)
                 print("✅ הכניס נתונים לטבלה 1")
@@ -598,10 +603,15 @@ def create_real_access_mdb(mdb_path, effective_date, insurance_data):
             
             # הכנסת נתונים לטבלה 1 - רק אם יש נתונים אמיתיים
             if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
+                # המרת None ל-NULL ב-SQL
+                nigrar_sql = 'NULL' if nigrar_value is None else str(nigrar_value)
+                handasi_sql = 'NULL' if handasi_value is None else str(handasi_value)
+                agricalture_sql = 'NULL' if agricalture_value is None else str(agricalture_value)
+                
                 insert1_sql = f"""
                 INSERT INTO tblBituachHova_edit 
                 (EffectiveDate, Nigrar, Handasi, Agricalture)
-                VALUES ('{effective_date}', {nigrar_value}, {handasi_value}, {agricalture_value})
+                VALUES ('{effective_date}', {nigrar_sql}, {handasi_sql}, {agricalture_sql})
                 """
                 access_app.DoCmd.RunSQL(insert1_sql)
                 print("✅ הכניס נתונים לטבלה 1")
