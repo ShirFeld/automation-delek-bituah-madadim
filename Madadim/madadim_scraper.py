@@ -8,6 +8,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from datetime import datetime, time as dt_time
 import time
+from datetime import datetime, timedelta, date
+
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
@@ -469,16 +471,21 @@ class MadadimScraper:
             continue_time.click()
             time.sleep(2)
             
-            # שלב 7: בחירת השנה הנוכחית
+            # שלב 7: # שלב 7: בחירת השנה של החודש הקודם
             print("בוחר שנה...")
             try:
-                current_year = datetime.today().year
-                print("curreny year: ", current_year)
+                today = date.today()
+                prev_month_date = today.replace(day=1) - timedelta(days=1)  # היום האחרון של החודש הקודם
+                target_year = prev_month_date.year
+                print("target year:", target_year)
                 
                 # מציאת האלמנט של השנה
                 year_link = self.wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, f"div.variableBoxInner.scroll-pane.jspScrollable div.jspPane ul li a[title='{current_year}']"))
-                )
+                    EC.presence_of_element_located((
+                        By.CSS_SELECTOR,
+                        f"div.variableBoxInner.scroll-pane.jspScrollable div.jspPane ul li a[title='{target_year}']"
+                    ))
+)
                 
                 # גלילה לאלמנט כדי שיהיה גלוי
                 self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", year_link)
@@ -486,7 +493,7 @@ class MadadimScraper:
                 
                 # לחיצה על השנה
                 year_link.click()
-                print(f"OK נבחרה שנה {current_year}")
+                print(f"OK נבחרה שנה {target_year}")
                 time.sleep(2)
             except Exception as e:
                 print(f"ERROR שגיאה בבחירת שנה: {e}")
@@ -513,7 +520,7 @@ class MadadimScraper:
                 price_index = self.wait.until(
                 EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
                 )
-                price_link = price_index[2].find_element(By.CSS_SELECTOR, f"ul li a[title='{current_year}']")
+                price_link = price_index[2].find_element(By.CSS_SELECTOR, f"ul li a[title='{target_year}']")
                 print(f"price_link:  {price_link}")
                 price_link.click()
                 time.sleep(1)
