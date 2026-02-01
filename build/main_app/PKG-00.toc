@@ -1,4 +1,4 @@
-('C:\\Users\\shir.feldman\\Desktop\\UpdateDelek\\build\\main_app\\Automation_KolNatun_Fixed.pkg',
+('C:\\Users\\shir.feldman\\Desktop\\UpdateDelek\\build\\main_app\\Automation_KolNatun.pkg',
  {'BINARY': True,
   'DATA': True,
   'EXECUTABLE': True,
