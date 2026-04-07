@@ -9,6 +9,7 @@
 
 import os
 import time
+import re
 from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -186,8 +187,35 @@ class InsuranceScraper:
         self.driver.find_element(By.ID, 'press_to_compare').click()
         time.sleep(12)  # Increased wait time for commercial vehicles
 
-    def _extract_harel_price(self):
-        # חיפוש הראל עם מספר אפשרויות
+    def _extract_harel_price(self, price_column_index=None):
+        """
+        מחלץ את תעריף הראל מתוך שורת התוצאות.
+        
+        לוגיקה:
+        1. מוצא את שורת הראל בטבלה.
+        2. מאתר את אינדקס העמודה של הכותרת 'תעריף בש\"ח' (או טקסט דומה).
+        3. מחלץ את הערך מאותה עמודה בלבד.
+        4. אם לא נמצאה כותרת מתאימה – נופל חזרה ללוגיקה הישנה:
+        בחירת העמודה לפי price_column_index (אם סופק) או הסריקה של כל הערכים המספריים.
+        """
+        PRICE_MIN = 100  # מסנן גיל/רישיון וכד' במקרה של fallback
+
+        def _parse_numeric_value(raw_text):
+            """
+            מחלץ מספר מטקסט תא גם אם יש תווים נלווים (למשל '*', הערות, סימן ₪).
+            דוגמאות נתמכות: '2,357 *', '₪ 2,357', '2,357.00'
+            """
+            if not raw_text:
+                return None
+            cleaned = raw_text.replace('₪', '').replace(' ', '')
+            match = re.search(r"\d[\d,]*(?:\.\d+)?", cleaned)
+            if not match:
+                return None
+            num_text = match.group(0).replace(',', '')
+            try:
+                return float(num_text)
+            except ValueError:
+                return None
         harel_selectors = [
             "//td[contains(normalize-space(.), 'הראל')]",
             "//td[contains(text(), 'הראל חברה לביטוח')]",
@@ -199,21 +227,68 @@ class InsuranceScraper:
             for cell in cells:
                 try:
                     row = cell.find_element(By.XPATH, './ancestor::tr')
+                    table = cell.find_element(By.XPATH, './ancestor::table')
                     print(f"🔍 נמצאה שורת הראל: {row.text}")
                     
-                    # חיפוש מחיר בשורה
-                    for td in row.find_elements(By.TAG_NAME, 'td'):
-                        txt = td.text.strip().replace('₪', '').replace(',', '').replace(' ', '')
-                        if txt and txt.replace('.', '').isdigit():
-                            price = float(txt)
-                            print(f"💰 מצא מחיר הראל: {price} ₪")
-                            return price
+                    # שלב 1: ניסיון לזהות אינדקס עמודת 'תעריף בש\"ח' לפי כותרת
+                    tariff_col_idx = None
+                    try:
+                        headers = table.find_elements(By.XPATH, ".//th")
+                        for i, th in enumerate(headers):
+                            header_text = th.text.strip().replace(' ', '').replace('"', '').replace("'", "")
+                            # מחפש וריאציות של 'תעריף בש\"ח'
+                            if ("תעריףבשח" in header_text) or ("תעריףבשח" in header_text) or ("תעריף" in header_text and "שח" in header_text):
+                                tariff_col_idx = i
+                                break
+                    except Exception as e:
+                        print(f"⚠️ שגיאה באיתור כותרות טבלה: {e}")
+                        tariff_col_idx = None
+                    
+                    cells_in_row = row.find_elements(By.TAG_NAME, 'td')
+                    
+                    # שלב 2: ניסיון ראשון – שימוש בעמודת 'תעריף בש\"ח' לפי הכותרת
+                    candidate_indices = []
+                    if tariff_col_idx is not None and 0 <= tariff_col_idx < len(cells_in_row):
+                        candidate_indices.append(tariff_col_idx)
+                    
+                    # שלב 3: אם לא נמצאה כותרת, משתמשים ב-price_column_index (אם קיים)
+                    if not candidate_indices and price_column_index is not None:
+                        if 0 <= price_column_index < len(cells_in_row):
+                            candidate_indices.append(price_column_index)
+                    
+                    # שלב 4: אם עדיין אין – ננסה את כל העמודות בסדר שלהן
+                    if not candidate_indices:
+                        candidate_indices = list(range(len(cells_in_row)))
+                    
+                    # ניסיון לחלץ מחיר מהעמודות המועמדות
+                    for idx in candidate_indices:
+                        try:
+                            td = cells_in_row[idx]
+                            val = _parse_numeric_value(td.text.strip())
+                            if val is not None and val >= PRICE_MIN:
+                                print(f"💰 מצא תעריף הראל בעמודה {idx}: {val} ₪")
+                                return val
+                        except Exception as e:
+                            print(f"⚠️ שגיאה בקריאת עמודה {idx}: {e}")
+                            continue
+                    
+                    # שלב 5: fallback אחרון – סורק את כל הערכים המספריים בשורה ומחזיר את הגבוה ביותר
+                    prices = []
+                    for td in cells_in_row:
+                        val = _parse_numeric_value(td.text.strip())
+                        if val is not None and val >= PRICE_MIN:
+                            prices.append(val)
+                    if prices:
+                        max_price = max(prices)
+                        print(f"💰 fallback: מחזיר את המחיר הגבוה ביותר בשורה: {max_price} ₪")
+                        return max_price
+
                 except Exception as e:
                     print(f"⚠️ שגיאה בעיבוד שורת הראל: {e}")
                     continue
             
-            print("❌ לא נמצא מחיר הראל")
-            return None
+        print("❌ לא נמצא מחיר הראל")
+        return None
                 
     def _fill_common(self, age, lic):
         try:
@@ -327,13 +402,33 @@ class InsuranceScraper:
     def _scrape_special(self):
         self._goto(); Select(self.driver.find_element(By.ID,'ddlSheets')).select_by_value('7'); time.sleep(1)
         self._fill_common(19, 2)
-        scenarios = [('Nigrar','35'), ('Handasi','4'), ('Agricalture','11')]
+        # (שם מפתח, ערך dropdown מועדף, טקסט fallback לאיתור אופציה)
+        scenarios = [
+            ('Nigrar', '35', 'נגרר'),
+            ('Handasi', '4', 'הנדסי'),
+            ('Agricalture', '11', 'חקלא')
+        ]
         res = {}
-        for key, val in scenarios:
+        for key, val, fallback_text in scenarios:
             try:
                 print(f"🎯 תרחיש {key}: בוחר ערך {val}")
-                Select(self.driver.find_element(By.ID,'A')).select_by_value(val)
+                dropdown = self.driver.find_element(By.ID, 'A')
+                sel = Select(dropdown)
+                try:
+                    sel.select_by_value(val)
+                except Exception:
+                    # fallback: איתור לפי טקסט האופציה אם value השתנה באתר
+                    selected = False
+                    for opt in sel.options:
+                        if fallback_text in (opt.text or ''):
+                            sel.select_by_visible_text(opt.text)
+                            selected = True
+                            print(f"ℹ️ fallback בחירה לפי טקסט: {opt.text}")
+                            break
+                    if not selected:
+                        raise
                 self._press_compare()
+                # תמיד מחלץ לפי עמודת "תעריף בש\"ח" (לא מדד שירות)
                 price = self._extract_harel_price()
                 res[key] = price
                 print(f"📊 תוצאה {key}: {price}")
