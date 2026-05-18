@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 import sys
 import os
+import threading
 import config
 
 # ייבוא התוכנה הקיימת לדלק
@@ -648,7 +649,7 @@ class MainApplication:
         buttons_frame.pack(pady=30)
         
         # כפתור לשליפת כל המדדים
-        fetch_all_button = tk.Button(
+        self.madadim_fetch_button = tk.Button(
             buttons_frame,
             text="שלוף את כל המדדים",
             font=self.fonts['button'],
@@ -661,95 +662,106 @@ class MainApplication:
             cursor='hand2',
             command=self.fetch_all_madadim
         )
-        fetch_all_button.pack(padx=10)
+        self.madadim_fetch_button.pack(padx=10)
         
         # מסגרת לתוצאות
         self.results_frame = tk.Frame(self.madadim_app_frame, bg='#f0f0f0')
         self.results_frame.pack(fill='both', expand=True, padx=20, pady=20)
         
         # הוספת אפקטי hover
-        fetch_all_button.bind('<Enter>', lambda e: fetch_all_button.config(bg=self.colors['primary_hover']))
-        fetch_all_button.bind('<Leave>', lambda e: fetch_all_button.config(bg=self.colors['primary']))
+        self.madadim_fetch_button.bind('<Enter>', lambda e: self.madadim_fetch_button.config(bg=self.colors['primary_hover']))
+        self.madadim_fetch_button.bind('<Leave>', lambda e: self.madadim_fetch_button.config(bg=self.colors['primary']))
     
     def fetch_all_madadim(self):
-        """שליפת כל המדדים"""
-        # ניקוי תוצאות קודמות
+        """שליפת כל המדדים (ברקע כדי שלא יקפיא את הממשק)"""
+        if getattr(self, '_madadim_running', False):
+            return
+
         for widget in self.results_frame.winfo_children():
             widget.destroy()
-            
-        # הודעת התחלה
-        status_label = tk.Label(
+
+        self._madadim_status_label = tk.Label(
             self.results_frame,
-            text="מתחיל שליפת כל המדדים...",
+            text="מתחיל שליפת כל המדדים... (יפתח Chrome)",
             font=self.fonts['text'],
             bg='#f0f0f0',
             fg=self.colors['text']
         )
-        status_label.pack(pady=10)
-        
-        self.root.update()
-        
-        try:
-            # יצירת scraper
-            scraper = MadadimScraper()
-            
-            # יצירת קובץ בסיסי
-            scraper.create_data_file()
-            
-            status_label.config(text="שולף מדדים מאתר הלמ\"ס...")
-            self.root.update()
-            
-            # שליפת כל המדדים
-            cbs_results, bls_value = scraper.scrape_all_cbs_indicators()
-            
-            if cbs_results or bls_value:
-                # עדכון הקובץ
-                scraper.update_data_file_with_values(cbs_results, bls_value)
-                
-                success_label = tk.Label(
-                    self.results_frame,
-                    text=f"הושלמה שליפת {len(cbs_results)} מדדים מהלמ\"ס!",
-                    font=self.fonts['text'],
-                    bg='#f0f0f0',
-                    fg='green'
-                )
-                success_label.pack(pady=10)
-                
-                # הצגת המדדים ששלפנו
-                results_text = "מדדים ששלפנו:\n"
-                for name, value in cbs_results.items():
-                    results_text += f"• {name}: {value}\n"
-                if bls_value:
-                    results_text += f"• Consumer Price Index (BLS): {bls_value}\n"
-                
-                results_label = tk.Label(
-                    self.results_frame,
-                    text=results_text,
-                    font=self.fonts['text'],
-                    bg='#f0f0f0',
-                    fg=self.colors['text'],
-                    justify='right'
-                )
-                results_label.pack(pady=10)
-            else:
-                error_label = tk.Label(
-                    self.results_frame,
-                    text="לא הצלחנו לשלוף מדדים",
-                    font=self.fonts['text'],
-                    bg='#f0f0f0',
-                    fg='red'
-                )
-                error_label.pack(pady=10)
-                
-        except Exception as e:
-            error_label = tk.Label(
-                self.results_frame,
-                text=f"שגיאה: {str(e)}",
-                font=self.fonts['text'],
-                bg='#f0f0f0',
-                fg='red'
-            )
-            error_label.pack(pady=10)
+        self._madadim_status_label.pack(pady=10)
+
+        self._madadim_running = True
+        self.madadim_fetch_button.config(state='disabled', text="שולף מדדים...")
+
+        def scrape_task():
+            try:
+                scraper = MadadimScraper()
+                scraper.create_data_file()
+
+                def update_status(msg):
+                    self.root.after(0, lambda: self._madadim_status_label.config(text=msg))
+
+                update_status("שולף מדדים מאתר הלמ\"ס... (זה עשוי לקחת כ-10 דקות)")
+                cbs_results, bls_value = scraper.scrape_all_cbs_indicators()
+
+                def show_results():
+                    for widget in self.results_frame.winfo_children():
+                        widget.destroy()
+                    if cbs_results or bls_value:
+                        scraper.update_data_file_with_values(cbs_results, bls_value)
+                        tk.Label(
+                            self.results_frame,
+                            text=f"הושלמה שליפת {len(cbs_results)} מדדים מהלמ\"ס!",
+                            font=self.fonts['text'],
+                            bg='#f0f0f0',
+                            fg='green'
+                        ).pack(pady=10)
+                        results_text = "מדדים ששלפנו:\n"
+                        for name, value in cbs_results.items():
+                            results_text += f"• {name}: {value}\n"
+                        if bls_value:
+                            results_text += f"• Consumer Price Index (BLS): {bls_value}\n"
+                        tk.Label(
+                            self.results_frame,
+                            text=results_text,
+                            font=self.fonts['text'],
+                            bg='#f0f0f0',
+                            fg=self.colors['text'],
+                            justify='right'
+                        ).pack(pady=10)
+                    else:
+                        tk.Label(
+                            self.results_frame,
+                            text="לא הצלחנו לשלוף מדדים. בדקי ש-Chrome מותקן ונסי שוב.",
+                            font=self.fonts['text'],
+                            bg='#f0f0f0',
+                            fg='red',
+                            wraplength=600,
+                            justify='right'
+                        ).pack(pady=10)
+
+                self.root.after(0, show_results)
+
+            except Exception as e:
+                def show_error():
+                    for widget in self.results_frame.winfo_children():
+                        widget.destroy()
+                    tk.Label(
+                        self.results_frame,
+                        text=f"שגיאה: {str(e)}",
+                        font=self.fonts['text'],
+                        bg='#f0f0f0',
+                        fg='red',
+                        wraplength=600,
+                        justify='right'
+                    ).pack(pady=10)
+                self.root.after(0, show_error)
+            finally:
+                def finish():
+                    self._madadim_running = False
+                    self.madadim_fetch_button.config(state='normal', text="שלוף את כל המדדים")
+                self.root.after(0, finish)
+
+        threading.Thread(target=scrape_task, daemon=True).start()
 
     def run(self):
         """הפעלת האפליקציה הראשית"""

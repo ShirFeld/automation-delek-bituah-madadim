@@ -57,6 +57,7 @@ class MadadimScraper:
         # הגדרות selenium
         self.driver = None
         self.wait = None
+        self._driver_error = None
     
 
     def get_previous_month_filename(self):
@@ -117,7 +118,8 @@ class MadadimScraper:
         return file_path
     
     def setup_driver(self):
-        """הגדרת דפדפן Chrome עם הגנות מרביות"""
+        """הגדרת דפדפן Chrome עם הגנות מרביות. מחזיר True בהצלחה."""
+        self._driver_error = None
         options = Options()
         
         # הגדרות אנטי-זיהוי מתקדמות
@@ -230,15 +232,161 @@ class MadadimScraper:
             print("OK WebDriverWait הוגדר")
             
             print("Chrome driver מוכן לשימוש בהצלחה!")
+            return True
             
         except Exception as e:
+            self._driver_error = str(e)
             print(f"ERROR שגיאה בהגדרת דפדפן: {e}")
             self.driver = None
+            self.wait = None
+            return False
         
     def close_driver(self):
         """סגירת הדפדפן"""
         if self.driver:
             self.driver.quit()
+
+    def _switch_to_cbs_tool_frame(self):
+        """מעבר ל-iframe של מחולל המדדים (לא תמיד frame(0))."""
+        self.driver.switch_to.default_content()
+        time.sleep(1)
+
+        code_field_selectors = [
+            "input[ng-model='mainCtrl.codesearch']",
+            "input[ng-model*='codesearch']",
+            "input[placeholder*='קוד']",
+        ]
+
+        # ניסיון ישיר בדף הראשי
+        for selector in code_field_selectors:
+            if self.driver.find_elements(By.CSS_SELECTOR, selector):
+                print(f"OK נמצא שדה קוד בדף הראשי ({selector})")
+                return True
+
+        iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+        print(f"נמצאו {len(iframes)} iframes, מחפש את מחולל המדדים...")
+        for index in range(len(iframes)):
+            try:
+                self.driver.switch_to.default_content()
+                self.driver.switch_to.frame(index)
+                for selector in code_field_selectors:
+                    if self.driver.find_elements(By.CSS_SELECTOR, selector):
+                        print(f"OK נמצא מחולל מדדים ב-iframe {index} ({selector})")
+                        return True
+            except Exception:
+                continue
+
+        self.driver.switch_to.default_content()
+        print("ERROR לא נמצא iframe של מחולל המדדים")
+        return False
+
+    def _select_search_by_code_mode(self):
+        """בחירת מצב חיפוש לפי קוד."""
+        from selenium.webdriver.common.action_chains import ActionChains
+
+        radio_selectors = [
+            (By.NAME, "7"),
+            (By.CSS_SELECTOR, "input[type='radio'][value='7']"),
+            (By.CSS_SELECTOR, "input[type='radio'][ng-value='7']"),
+            (By.XPATH, "//label[contains(., 'קוד')]/preceding-sibling::input[@type='radio']"),
+            (By.XPATH, "//label[contains(., 'קוד')]/input[@type='radio']"),
+        ]
+
+        for by, selector in radio_selectors:
+            try:
+                radio = self.wait.until(EC.presence_of_element_located((by, selector)))
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", radio)
+                time.sleep(0.5)
+                ActionChains(self.driver).move_to_element(radio).perform()
+                try:
+                    radio.click()
+                except Exception:
+                    self.driver.execute_script("arguments[0].click();", radio)
+                time.sleep(2)
+                if radio.is_selected() or radio.get_attribute("checked"):
+                    print(f"OK נבחר מצב חיפוש לפי קוד ({selector})")
+                    return True
+                # גם אם is_selected לא עובד, נמשיך אם לחצנו
+                print(f"OK לחצנו על רדיו חיפוש לפי קוד ({selector})")
+                return True
+            except Exception:
+                continue
+
+        print("ERROR לא הצלחתי לבחור מצב חיפוש לפי קוד")
+        return False
+
+    def _find_code_input(self):
+        """איתור שדה הזנת קוד המדד."""
+        selectors = [
+            "input[ng-model='mainCtrl.codesearch']",
+            "input[ng-model*='codesearch']",
+            "input[placeholder*='קוד']",
+        ]
+        for selector in selectors:
+            elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+            if elements:
+                return elements[0]
+        return None
+
+    def _enter_indicator_code(self, indicator_code):
+        """הזנת קוד מדד ולחיצה על המשך."""
+        from selenium.webdriver.common.action_chains import ActionChains
+
+        code_field = self.wait.until(lambda d: self._find_code_input())
+        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", code_field)
+        time.sleep(0.5)
+
+        code_field.click()
+        time.sleep(0.3)
+        code_field.clear()
+        time.sleep(0.3)
+
+        # הזנה מהירה ויציבה (פחות סיכוי לאיבוד פוקוס)
+        code_field.send_keys(indicator_code)
+        entered = (code_field.get_attribute("value") or "").strip()
+        if entered != indicator_code:
+            self.driver.execute_script(
+                "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input')); arguments[0].dispatchEvent(new Event('change'));",
+                code_field,
+                indicator_code,
+            )
+            entered = (code_field.get_attribute("value") or "").strip()
+
+        if entered != indicator_code:
+            print(f"ERROR הקוד לא הוזן. צפוי: {indicator_code}, בפועל: '{entered}'")
+            return False
+
+        print(f"OK קוד {indicator_code} הוזן בהצלחה")
+        time.sleep(1)
+
+        continue_selectors = [
+            (By.CSS_SELECTOR, 'a.greenBigBtn[data-ng-click="mainCtrl.searchByCode();"]'),
+            (By.XPATH, "//a[contains(@data-ng-click, 'searchByCode')]"),
+            (By.XPATH, "//a[contains(@class, 'greenBigBtn') and contains(., 'המשך')]"),
+        ]
+        for by, selector in continue_selectors:
+            try:
+                continue_btn = self.wait.until(EC.element_to_be_clickable((by, selector)))
+                continue_btn.click()
+                print("OK נלחץ על המשך אחרי הזנת קוד")
+                time.sleep(3)
+                return True
+            except Exception:
+                continue
+
+        print("ERROR לא נמצא כפתור המשך אחרי הזנת קוד")
+        return False
+
+    def _open_cbs_madadim_page(self):
+        """פתיחת דף מחולל המדדים ומעבר ל-iframe הנכון."""
+        if not self.driver:
+            print("ERROR אין דפדפן פעיל")
+            return False
+        self.driver.switch_to.default_content()
+        self.driver.get(self.cbs_url)
+        self.driver.set_window_size(1936, 1048)
+        time.sleep(4)
+        return self._switch_to_cbs_tool_frame()
         
     def get_previous_month_number(self):
         """קבלת מספר החודש הקודם"""
@@ -260,119 +408,30 @@ class MadadimScraper:
 
         
     
-    def scrape_cbs_indicator(self, indicator_name, indicator_code):
+    def scrape_cbs_indicator(self, indicator_name, indicator_code, scenario_text=None):
         """שליפת מדד בודד מאתר הלמ"ס"""
         try:
             # בדיקה אם החלון עדיין פתוח
             try:
                 self.driver.current_url
-            except:
-                print(f"ERROR - החלון נסגר, יוצר חלון חדש...")
-                self.setup_driver()
+            except Exception:
+                print("ERROR - החלון נסגר, יוצר חלון חדש...")
+                if not self.setup_driver():
+                    return None
+            
+            if not self.driver:
+                return None
             
             print(f"מתחיל לשלוף את המדד: {indicator_name} (קוד: {indicator_code})")
             
-            # פתיחת האתר - בדיוק לפי הקוד שעבד
-            self.driver.get("https://www.cbs.gov.il/he/Statistics/Pages/%D7%9E%D7%97%D7%95%D7%9C%D7%9C%D7%99%D7%9D/%D7%9E%D7%97%D7%95%D7%9C%D7%9C-%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D.aspx")
-            self.driver.set_window_size(1936, 1048)  # חזרה לגודל הספציפי שעבד
-            self.driver.switch_to.frame(0)
-            time.sleep(3)  # המתנה ארוכה יותר
-            
-            # שלב 1: סימון הכפתור לחיפוש לפי קוד
-            print("בוחר רדיו באטון...")
-            try:
-                # נסיון עם ActionChains כמו בקוד המקורי
-                from selenium.webdriver.common.action_chains import ActionChains
-                radio_element = self.driver.find_element(By.NAME, "7")
-                actions = ActionChains(self.driver)
-                actions.move_to_element(radio_element).perform()
-                time.sleep(1)
-                
-                try:
-                    radio_element.click()
-                    print("OK רדיו נלחץ בלחיצה רגילה")
-                except:
-                    self.driver.execute_script("arguments[0].click();", radio_element)
-                    print("OK רדיו נלחץ עם JavaScript")
-                
-                time.sleep(3)  # המתנה ארוכה אחרי הרדיו
-            except Exception as e:
-                print(f"ERROR שגיאה ברדיו: {e}")
+            if not self._open_cbs_madadim_page():
                 return None
-            
-            # שלב 2: הכנסת הקוד - עם הגנות מרביות וההמתנות
+
+            if not self._select_search_by_code_mode():
+                return None
+
             print(f"מכניס קוד {indicator_code}...")
-            try:
-                # המתנה ארוכה יותר לפני הכנסת קוד
-                time.sleep(2)
-                
-                # בדיקה שהדפדפן עדיין פעיל
-                try:
-                    current_url = self.driver.current_url
-                    print(f"OK דפדפן פעיל: {current_url[:50]}...")
-                except:
-                    print("ERROR דפדפן נסגר!")
-                    return None
-                
-                # חיפוש השדה הנכון עם המתנה
-                print("מחפש שדה הקוד...")
-                code_field = self.wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "input[ng-model='mainCtrl.codesearch']"))
-                )
-                print("OK שדה קוד נמצא")
-                
-                # ניקוי השדה בעדינות
-                code_field.clear()
-                time.sleep(1)
-                
-                # לחיצה על השדה
-                actions = ActionChains(self.driver)
-                actions.move_to_element(code_field).perform()
-                time.sleep(0.5)
-                code_field.click()
-                time.sleep(1)
-                
-                print(f"מתחיל להכניס קוד {indicator_code} אות אחרי אות...")
-                
-                # הכנסת הקוד אות אחרי אות (אנושי מאוד)
-                for i, char in enumerate(indicator_code):
-                    code_field.send_keys(char)
-                    time.sleep(0.2 + random.random() * 0.3)  # המתנה אקראית בין אותיות
-                    
-                    # בדיקה כל כמה אותיות שהדפדפן עדיין פעיל
-                    if i % 2 == 0:
-                        try:
-                            self.driver.current_url
-                        except:
-                            print("ERROR דפדפן נסגר במהלך הכנסת קוד!")
-                            return None
-                
-                print(f"OK קוד {indicator_code} הוכנס בהצלחה")
-                time.sleep(3)  # המתנה ארוכה אחרי הכנסת הקוד
-                
-                # בדיקה אחרונה שהדפדפן עדיין פעיל
-                try:
-                    self.driver.current_url
-                    print("OK דפדפן עדיין פעיל אחרי הכנסת קוד")
-                except:
-                    print("ERROR דפדפן נסגר אחרי הכנסת קוד!")
-                    return None
-                    
-            except Exception as e:
-                print(f"ERROR שגיאה בהכנסת קוד: {e}")
-                return None
-            
-            # שלב 3: לחיצה על כפתור המשך
-            print("מנסה ללחוץ על המשך...")
-            try:
-                continue_btn = self.wait.until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'a.greenBigBtn[data-ng-click="mainCtrl.searchByCode();"]'))
-                )
-                continue_btn.click()
-                print("OK נלחץ על המשך")
-                time.sleep(3)
-            except Exception as e:
-                print(f"ERROR שגיאה בלחיצת המשך: {e}")
+            if not self._enter_indicator_code(indicator_code):
                 return None
 
             
@@ -417,11 +476,9 @@ class MadadimScraper:
             next_arrow.click()
             time.sleep(2)
             
-            # שלב 5: בחירת תת נושא ראשון - גנרי
-            print("בוחר תת נושא ראשון...")
-            
+            # שלב 5: בחירת תת-נושא המתאים למדד הנוכחי בלבד
+            print("בוחר תת נושא...")
             try:
-            # מחפש את כל התת נושאים
                 subtopics = self.wait.until(
                     EC.presence_of_all_elements_located(
                         (By.CSS_SELECTOR, 'div.jspPane ul.scroll-pane-inner li a.ellipsis.ng-binding')
@@ -429,20 +486,32 @@ class MadadimScraper:
                 )
                 print(f"נמצאו {len(subtopics)} תת נושאים")
 
-                if len(subtopics) == 0:
-                    print(" לא נמצאו תת נושאים")
-                else:
-                    for topic_text in self.cbs_scenarios:
-                        target = next((t for t in subtopics if topic_text in t.text), None)
-                        if target:
-                            print(f"בוחר תת נושא: {topic_text}")
+                if not subtopics:
+                    print("ERROR לא נמצאו תת נושאים")
+                    return None
+
+                if scenario_text:
+                    target = next((t for t in subtopics if scenario_text in (t.text or "")), None)
+                    if target:
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target)
+                        time.sleep(0.5)
+                        try:
                             target.click()
-                            time.sleep(1)
-                        else:
-                            print(f" לא נמצא תת נושא עם טקסט: {topic_text}")
+                        except Exception:
+                            self.driver.execute_script("arguments[0].click();", target)
+                        print(f"OK נבחר תת נושא: {scenario_text}")
+                        time.sleep(1)
+                    else:
+                        print(f"ERROR לא נמצא תת נושא: {scenario_text}")
+                        return None
+                else:
+                    subtopics[0].click()
+                    print("OK נבחר תת נושא ראשון (ברירת מחדל)")
+                    time.sleep(1)
 
             except Exception as e:
-                print(f" שגיאה בבחירת תת נושא: {e}")
+                print(f"ERROR שגיאה בבחירת תת נושא: {e}")
+                return None
 
             
             # שלב 6: בחירת הסדרה הראשונה (צ'ק בוקס) - גנרי
@@ -683,14 +752,21 @@ class MadadimScraper:
     
     def scrape_all_cbs_indicators(self):
         """שליפת כל המדדים מאתר הלמ"ס"""
-        self.setup_driver()
+        if not self.setup_driver():
+            err = self._driver_error or "לא ניתן להפעיל את Chrome"
+            raise RuntimeError(
+                f"לא ניתן להפעיל את דפדפן Chrome: {err}\n"
+                "ודאי ש-Chrome מותקן וש-Selenium מעודכן."
+            )
         
         results = {}
         bls_value = None
         
         try:
-            for indicator_name, indicator_code in self.cbs_indicators.items():
-                value = self.scrape_cbs_indicator(indicator_name, indicator_code)
+            indicators = list(self.cbs_indicators.items())
+            for i, (indicator_name, indicator_code) in enumerate(indicators):
+                scenario_text = self.cbs_scenarios[i] if i < len(self.cbs_scenarios) else None
+                value = self.scrape_cbs_indicator(indicator_name, indicator_code, scenario_text)
                 if value:
                     results[indicator_name] = value
                     
@@ -887,7 +963,7 @@ class MadadimScraper:
                 if line.startswith(pattern):
                     # החלפת השורה
                     lines[i] = f"{pattern}{value}\n"
-                    print(f"✅ עודכנה שורה {i}: {indicator_name} = {value}")
+                    print(f"OK עודכנה שורה {i}: {indicator_name} = {value}")
                     break
             else:
                 print(f"⚠️ לא נמצא דפוס: '{pattern}'")
@@ -899,7 +975,7 @@ class MadadimScraper:
             for i, line in enumerate(lines):
                 if line.startswith(bls_pattern):
                     lines[i] = f"{bls_pattern}{bls_value}\n"
-                    print(f"✅ עודכנה שורה {i}: BLS = {bls_value}")
+                    print(f"OK עודכנה שורה {i}: BLS = {bls_value}")
                     break
             else:
                 print(f"⚠️ לא נמצא דפוס BLS: '{bls_pattern}'")
