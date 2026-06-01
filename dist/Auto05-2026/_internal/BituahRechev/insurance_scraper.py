@@ -444,7 +444,7 @@ class InsuranceScraper:
     # outputs
     def save_tables_as_image(self, insurance_data=None, save_path=None):
         try:
-            from simple_mdb_creator import prepare_all_tables_data
+            from simple_mdb_creator import prepare_all_tables_data, get_bituah_effective_dates
             import matplotlib.pyplot as plt
             
             # אם לא סופק נתיב, נשתמש בנתיב מקובץ הקונפיג
@@ -459,9 +459,8 @@ class InsuranceScraper:
                 print(f"שגיאה ביצירת תיקייה: {e}")
                 return None
             
-            # תאריך עתידי - לשימוש בתוך הטבלה ולשם הקובץ (החודש הבא)
-            next_month = (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1)
-            target_month_code = next_month.strftime('%m%y')
+            # תאריך עתידי - לשימוש בתוך הטבלה ולשם הקובץ (החודש הבא, כמו par_rech)
+            next_month, effective_date_str, target_month_code = get_bituah_effective_dates()
             
             # שם קובץ לפי החודש הבא
             image_path = os.path.join(save_path, f"{target_month_code}.jpg")
@@ -472,9 +471,9 @@ class InsuranceScraper:
                 print(f"🗑️ מחק קובץ תמונה קיים: {image_path}")
             
             print(f"📁 שם קובץ תמונה: {target_month_code}.jpg (חודש הבא)")
-            print(f"📅 תאריך בטבלה: {next_month.strftime('%d/%m/%Y')} (חודש עתידי)")
-            
-            tables = prepare_all_tables_data(next_month.strftime('%d/%m/%Y'), insurance_data or {})
+            print(f"📅 תאריך בטבלה: {effective_date_str} (חודש עתידי)")
+
+            tables = prepare_all_tables_data(effective_date_str, insurance_data or {})
             
             # בדיקה שיש נתונים לפחות בטבלה אחת
             has_data = any(len(data['rows']) > 0 for data in tables.values())
@@ -558,8 +557,9 @@ class InsuranceScraper:
             print(f"✅ נמצאה שורה אחרונה ב-00012 (שורה {last_00012_index + 1})")
             print(f"📄 שורה: {last_00012_line[:80]}...")
             
-            # קביעת תאריך חדש (חודש הבא)
-            next_month = (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1)
+            # קביעת תאריך חדש (חודש הבא) - אותה לוגיקה כמו KNE/MDB
+            from simple_mdb_creator import get_bituah_effective_dates
+            next_month, _, _ = get_bituah_effective_dates()
             new_date = f"{next_month.strftime('%y/%m')}"
             print(f"📅 תאריך חדש: {new_date}")
             
