@@ -963,7 +963,7 @@ class MadadimScraper:
                 if line.startswith(pattern):
                     # החלפת השורה
                     lines[i] = f"{pattern}{value}\n"
-                    print(f"✅ עודכנה שורה {i}: {indicator_name} = {value}")
+                    print(f"OK עודכנה שורה {i}: {indicator_name} = {value}")
                     break
             else:
                 print(f"⚠️ לא נמצא דפוס: '{pattern}'")
@@ -975,7 +975,7 @@ class MadadimScraper:
             for i, line in enumerate(lines):
                 if line.startswith(bls_pattern):
                     lines[i] = f"{bls_pattern}{bls_value}\n"
-                    print(f"✅ עודכנה שורה {i}: BLS = {bls_value}")
+                    print(f"OK עודכנה שורה {i}: BLS = {bls_value}")
                     break
             else:
                 print(f"⚠️ לא נמצא דפוס BLS: '{bls_pattern}'")

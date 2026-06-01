@@ -11,7 +11,7 @@ import csv
 import time
 import builtins
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 try:
     import pandas as pd
@@ -61,6 +61,63 @@ def _safe_remove_file(path, retries=3, delay_sec=2):
             return False
     return False
 
+
+def get_bituah_effective_dates(reference_date=None):
+    """
+    תאריך יעיל לביטוח חובה: ה-1 לחודש הבא (זהה ללוגיקה ב-par_rech.dat).
+    מחזיר: (next_month_dt, effective_date_dd_mm_yyyy, month_year_mmyy)
+    """
+    if reference_date is None:
+        reference_date = datetime.now()
+    next_month = (reference_date.replace(day=1) + timedelta(days=32)).replace(day=1)
+    effective_date = next_month.strftime("%d/%m/%Y")
+    month_year = next_month.strftime("%m%y")
+    return next_month, effective_date, month_year
+
+
+def _access_effective_date_for_com(access_app, effective_date_str):
+    """
+    תאריך לשדה Date/Time ב-Access.
+    Python datetime בחצות גורם להצגה 30/06 21:00 (הזזת timezone).
+    DateSerial מחזיר 01/07/2026 ללא שעה שגויה.
+    """
+    dt = datetime.strptime(effective_date_str, "%d/%m/%Y")
+    return access_app.Eval(f"DateSerial({dt.year}, {dt.month}, {dt.day})")
+
+
+def _clear_access_table(db, table_name):
+    """מוחק את כל השורות מטבלה (כולל שורות template עם תאריך ישן)."""
+    for sql in (f"DELETE FROM {table_name}", f"DELETE * FROM {table_name}"):
+        try:
+            db.Execute(sql)
+        except Exception:
+            pass
+
+    try:
+        rs = db.OpenRecordset(f"SELECT COUNT(*) AS c FROM {table_name}")
+        remaining = int(rs.Fields("c").Value or 0)
+        rs.Close()
+    except Exception:
+        remaining = -1
+
+    if remaining != 0:
+        try:
+            rs = db.OpenRecordset(table_name)
+            if not rs.EOF:
+                rs.MoveFirst()
+            while not rs.EOF:
+                rs.Delete()
+                rs.MoveNext()
+            rs.Close()
+            print(f"OK נוקתה הטבלה {table_name} (מחיקה שורה-שורה)")
+        except Exception as e:
+            print(f"WARNING שגיאה בניקוי {table_name}: {e}")
+            return False
+    else:
+        print(f"OK נוקתה הטבלה: {table_name}")
+    return True
+
+
 def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=None):
     """יצירת קבצי נתונים לביטוח"""
     try:
@@ -80,14 +137,10 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
             print(f"❌ שגיאה ביצירת תיקייה: {e}")
             return None
         
-        # קביעת חודש היעד - תמיד החודש הבא (תואם לתאריך היעיל בטבלה)
+        # קביעת חודש היעד - תמיד החודש הבא (זהה ל-par_rech.dat)
         current_date = datetime.now()
-        if current_date.month == 12:
-            next_month = datetime(current_date.year + 1, 1, 1)
-        else:
-            next_month = datetime(current_date.year, current_date.month + 1, 1)
-        target_month_year = next_month.strftime("%m%y")  # MMYY של החודש הבא
-        
+        next_month, effective_date, target_month_year = get_bituah_effective_dates(current_date)
+
         # יצירת שם הקובץ - פורמט kneMMYY (מבוסס על החודש הבא)
         if mdb_filename:
             mdb_path = os.path.join(save_path, mdb_filename)
@@ -95,10 +148,7 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
         else:
             month_year = target_month_year
             mdb_path = os.path.join(save_path, f"kne{month_year}.mdb")
-        
-        # תאריך יעיל - הראשון לחודש הבא (לתוך הטבלה)
-        effective_date = next_month.strftime("%d/%m/%Y")  # פורמט ישראלי: DD/MM/YYYY
-        
+
         print(f"📅 תאריך נוכחי: {current_date.strftime('%d/%m/%Y')}")
         print(f"📁 שם קובץ: kne{month_year}.mdb (חודש הבא)")
         print(f"🗓️ תאריך יעיל בטבלה: {effective_date} (חודש עתידי)")
@@ -485,15 +535,12 @@ def create_mdb_from_template(mdb_path, effective_date, insurance_data, template_
             access_app.OpenCurrentDatabase(mdb_path)
             print("✅ פתח קובץ MDB מועתק")
 
-            # ניקוי נתונים קיימים מה-template כדי למנוע תאריכים ישנים (חודש נוכחי)
-            # ולוודא שכל הרשומות החדשות יקבלו את תאריך החודש הבא.
+            # ניקוי נתונים קיימים מה-template (לעיתים נשאר תאריך החודש הנוכחי)
             db = access_app.CurrentDb()
+            access_date = _access_effective_date_for_com(access_app, effective_date)
+            print(f"🗓️ תאריך שייכנס ל-MDB: {effective_date} (DateSerial)")
             for table_name in ["tblBituachHova_edit", "tblBituachHovaMishari_edit", "tblBituachHovaPrati_edit"]:
-                try:
-                    db.Execute(f"DELETE FROM {table_name}")
-                    print(f"🧹 נוקתה הטבלה: {table_name}")
-                except Exception as e:
-                    print(f"⚠️ שגיאה בניקוי הטבלה {table_name}: {e}")
+                _clear_access_table(db, table_name)
             
             # הכנסת נתונים לטבלה 1: tblBituachHova_edit (רכב מיוחד)
             nigrar_value = None
@@ -513,7 +560,7 @@ def create_mdb_from_template(mdb_path, effective_date, insurance_data, template_
                 print("\n🔄 מכניס נתונים לטבלה 1 (רכב מיוחד)...")
                 recordset = db.OpenRecordset("tblBituachHova_edit")
                 recordset.AddNew()
-                recordset.Fields("EffectiveDate").Value = effective_date
+                recordset.Fields("EffectiveDate").Value = access_date
                 recordset.Fields("Nigrar").Value = nigrar_value
                 recordset.Fields("Handasi").Value = handasi_value
                 recordset.Fields("Agricalture").Value = agricalture_value
@@ -542,7 +589,7 @@ def create_mdb_from_template(mdb_path, effective_date, insurance_data, template_
                         ad2_value = int(ad2_value)
                         
                         recordset2.AddNew()
-                        recordset2.Fields("EffectiveDate").Value = effective_date
+                        recordset2.Fields("EffectiveDate").Value = access_date
                         recordset2.Fields("Age").Value = age
                         recordset2.Fields("Ad1").Value = ad1_value
                         recordset2.Fields("Ad2").Value = ad2_value
@@ -578,7 +625,7 @@ def create_mdb_from_template(mdb_path, effective_date, insurance_data, template_
                         ad4_value = int(ad4_value)
                         
                         recordset3.AddNew()
-                        recordset3.Fields("EffectiveDate").Value = effective_date
+                        recordset3.Fields("EffectiveDate").Value = access_date
                         recordset3.Fields("Age").Value = age
                         recordset3.Fields("Ad1").Value = ad1_value
                         recordset3.Fields("Ad2").Value = ad2_value
