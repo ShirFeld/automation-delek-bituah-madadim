@@ -594,6 +594,8 @@ class MainApplication:
                             msg += f"\n\n📷 טבלאות: {results['image_path']}"
                         if results['mdb_path']:
                             msg += f"\n📊 MDB: {results['mdb_path']}"
+                        if results.get('par_rech_updated'):
+                            msg += f"\n📋 par_rech.dat עודכן"
                         messagebox.showinfo("הצלחה", msg)
                     else:
                         from tkinter import messagebox

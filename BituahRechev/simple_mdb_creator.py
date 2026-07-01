@@ -62,6 +62,27 @@ def _safe_remove_file(path, retries=3, delay_sec=2):
     return False
 
 
+def count_scraped_insurance_prices(insurance_data):
+    """סופר כמה מחירים אמיתיים (לא None) נשלפו מכל הקטגוריות."""
+    if not insurance_data:
+        return 0
+    count = 0
+    for group in (insurance_data.get('private_car') or {}).values():
+        if group:
+            count += sum(1 for p in group.values() if p is not None)
+    for group in (insurance_data.get('commercial_car') or {}).values():
+        if group:
+            count += sum(1 for p in group.values() if p is not None)
+    special = insurance_data.get('special_vehicle') or {}
+    count += sum(1 for p in special.values() if p is not None)
+    return count
+
+
+def has_sufficient_insurance_data(insurance_data, minimum=37):
+    """בודק שיש מספיק נתונים לפני יצירת MDB / עדכון par_rech."""
+    return count_scraped_insurance_prices(insurance_data) >= minimum
+
+
 def get_bituah_effective_dates(reference_date=None):
     """
     תאריך יעיל לביטוח חובה: ה-1 לחודש הבא (זהה ללוגיקה ב-par_rech.dat).
@@ -124,10 +145,15 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
         # אם לא סופק נתיב, נשתמש בנתיב הנכון
         if save_path is None:
             save_path = r"C:\Users\shir.feldman\Desktop\parametrsUpdate\BituahRechev"
+
+        scraped_count = count_scraped_insurance_prices(insurance_data)
+        if not has_sufficient_insurance_data(insurance_data):
+            print(f"WARNING: לא מספיק נתונים ליצירת MDB ({scraped_count}/37) - מדלג")
+            return None
         
         print(f"🔍 מתחיל יצירת קבצי נתונים...")
         print(f"📂 נתיב: {save_path}")
-        print(f"📊 נתונים: {insurance_data is not None}")
+        print(f"📊 נתונים: {insurance_data is not None} ({scraped_count}/37)")
         
         # יצירת תיקייה אם לא קיימת
         try:
@@ -507,6 +533,10 @@ def create_mdb_from_template(mdb_path, effective_date, insurance_data, template_
     """יצירת קובץ MDB מ-template ע"י העתקה והכנסת נתונים"""
     try:
         import shutil
+
+        if os.path.normcase(os.path.abspath(mdb_path)) == os.path.normcase(os.path.abspath(template_path)):
+            print("ERROR: נתיב פלט MDB זהה ל-template - לא ניתן לדרוס את kne.mdb")
+            return None
         
         # בדיקה שה-template קיים
         if not os.path.exists(template_path):
