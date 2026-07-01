@@ -10,13 +10,30 @@
 import os
 import time
 import re
+import builtins
+import sys
 from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
-import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
+
+
+def print(*args, **kwargs):
+    """הדפסה בטוחה ב-Windows (מונע UnicodeEncodeError מאימוג'י בטרמינל)."""
+    try:
+        builtins.print(*args, **kwargs)
+    except UnicodeEncodeError:
+        sep = kwargs.get("sep", " ")
+        end = kwargs.get("end", "\n")
+        file_obj = kwargs.get("file", sys.stdout)
+        flush = kwargs.get("flush", False)
+        text = sep.join(str(a) for a in args)
+        encoding = getattr(file_obj, "encoding", None) or "utf-8"
+        safe_text = text.encode(encoding, errors="ignore").decode(encoding, errors="ignore")
+        builtins.print(safe_text, end=end, file=file_obj, flush=flush)
+
 
 class InsuranceScraper:
     def __init__(self):
@@ -63,7 +80,8 @@ class InsuranceScraper:
             'special_success': 0,
             'total_success': 0,
             'image_path': None,
-            'mdb_path': None
+            'mdb_path': None,
+            'par_rech_updated': False,
         }
         
         try:
@@ -132,6 +150,20 @@ class InsuranceScraper:
                 'commercial_car': commercial_results,
                 'special_vehicle': special_results
             }
+
+            from simple_mdb_creator import count_scraped_insurance_prices, has_sufficient_insurance_data
+            scraped_count = count_scraped_insurance_prices(insurance_data)
+            if display_callback:
+                display_callback(f"נשלפו {scraped_count}/37 מחירים")
+
+            if not has_sufficient_insurance_data(insurance_data):
+                msg = f"לא נשלפו מספיק נתונים ({scraped_count}/37) - לא יוצרים MDB ולא מעדכנים par_rech"
+                print(f"WARNING: {msg}")
+                if display_callback:
+                    display_callback(f"WARNING: {msg}")
+                if update_callback:
+                    update_callback(f"חסרים נתונים: {scraped_count}/37")
+                return results
             
             # שמירת תמונה
             if display_callback:
@@ -162,12 +194,15 @@ class InsuranceScraper:
             if update_callback:
                 update_callback("מעדכן par_rech.dat...")
             
-            self.update_par_rech_file(insurance_data)
-            if display_callback:
-                display_callback("✅ קובץ par_rech.dat עודכן בהצלחה")
+            results['par_rech_updated'] = self.update_par_rech_file(insurance_data)
+            if results['par_rech_updated'] and display_callback:
+                display_callback("קובץ par_rech.dat עודכן בהצלחה")
+            elif display_callback:
+                display_callback("WARNING: עדכון par_rech.dat נכשל - בדקי את הלוג")
             
             if update_callback:
-                update_callback(f"הושלם: {results['total_success']}/37 + MDB + par_rech.dat")
+                suffix = " + MDB + par_rech.dat" if results['par_rech_updated'] else " + MDB"
+                update_callback(f"הושלם: {results['total_success']}/37{suffix}")
             
         except Exception as e:
             print(f"שגיאה בשליפה מקיפה: {e}")
@@ -511,25 +546,36 @@ class InsuranceScraper:
             return None
     
     def update_par_rech_file(self, insurance_data):
-        """עדכון קובץ par_rech.dat עם נתוני ביטוח חדשים"""
-        print("\n" + "="*60)
-        print("🔄 מתחיל עדכון par_rech.dat")
-        print("="*60)
+        """עדכון קובץ par_rech.dat עם נתוני ביטוח חדשים. מחזיר True בהצלחה."""
         try:
-            # נתיב קריאה - מהשרת
+            print("\n" + "=" * 60)
+            print("מתחיל עדכון par_rech.dat")
+            print("=" * 60)
+
+            from simple_mdb_creator import has_sufficient_insurance_data
+            if not has_sufficient_insurance_data(insurance_data):
+                print("WARNING: לא מספיק נתונים לעדכון par_rech.dat")
+                return False
+
+            # נתיב קריאה - מהשרת, עם fallback לקובץ מקומי
             par_rech_source_path = config.BITUAH_RECHEV_PARAM_SOURCE_FILE
-            print(f"📂 נתיב מקור (קריאה): {par_rech_source_path}")
+            local_par_rech = os.path.join(config.BITUAH_RECHEV_OUTPUT_PATH, "par_rech.dat")
+            print(f"נתיב מקור (קריאה): {par_rech_source_path}")
             
             # נתיב כתיבה - לתיקייה המקומית
-            par_rech_output_path = os.path.join(config.BITUAH_RECHEV_OUTPUT_PATH, "par_rech.dat")
-            print(f"📂 נתיב יעד (כתיבה): {par_rech_output_path}")
+            par_rech_output_path = local_par_rech
+            print(f"נתיב יעד (כתיבה): {par_rech_output_path}")
             
             if not os.path.exists(par_rech_source_path):
-                print(f"❌ שגיאה: קובץ par_rech.dat לא נמצא ב-{par_rech_source_path}")
-                print(f"💡 וודא שהקובץ קיים בשרת")
-                return
+                print(f"WARNING: קובץ מקור לא נמצא בשרת: {par_rech_source_path}")
+                if os.path.exists(local_par_rech):
+                    par_rech_source_path = local_par_rech
+                    print(f"משתמש בקובץ מקומי כמקור: {par_rech_source_path}")
+                else:
+                    print("ERROR: לא נמצא par_rech.dat לא בשרת ולא מקומית")
+                    return False
             
-            print("✅ קובץ par_rech.dat נמצא במקור")
+            print("קובץ par_rech.dat נמצא במקור")
             
             # קריאת הקובץ מהמקור
             print("📖 קורא את הקובץ מהשרת...")
@@ -537,10 +583,10 @@ class InsuranceScraper:
                 lines = f.readlines()
             
             if not lines:
-                print("❌ קובץ par_rech.dat ריק")
-                return
+                print("ERROR: קובץ par_rech.dat ריק")
+                return False
             
-            print(f"✅ נמצאו {len(lines)} שורות בקובץ")
+            print(f"נמצאו {len(lines)} שורות בקובץ")
             
             # מציאת השורה האחרונה שמתחילה ב-00012:
             last_00012_line = None
@@ -551,24 +597,28 @@ class InsuranceScraper:
                     last_00012_index = i
             
             if not last_00012_line:
-                print("❌ לא נמצאה שורה שמתחילה ב-00012:")
-                return
+                print("ERROR: לא נמצאה שורה שמתחילה ב-00012:")
+                return False
             
-            print(f"✅ נמצאה שורה אחרונה ב-00012 (שורה {last_00012_index + 1})")
+            print(f"נמצאה שורה אחרונה ב-00012 (שורה {last_00012_index + 1})")
             print(f"📄 שורה: {last_00012_line[:80]}...")
             
             # קביעת תאריך חדש (חודש הבא) - אותה לוגיקה כמו KNE/MDB
             from simple_mdb_creator import get_bituah_effective_dates
             next_month, _, _ = get_bituah_effective_dates()
             new_date = f"{next_month.strftime('%y/%m')}"
-            print(f"📅 תאריך חדש: {new_date}")
-            
+            print(f"תאריך חדש: {new_date}")
+
             # פיצול השורה לפי :
             parts = last_00012_line.split(':')
-            
+
             if len(parts) < 45:
-                print(f"❌ שגיאה: מבנה שורה לא תקין, יש רק {len(parts)} חלקים")
-                return
+                print(f"ERROR: מבנה שורה לא תקין, יש רק {len(parts)} חלקים")
+                return False
+
+            replace_existing = parts[1].strip() == new_date
+            if replace_existing:
+                print(f"WARNING: שורת 00012 לחודש {new_date} כבר קיימת - מעדכן במקום")
             
             # פונקציה עזר לשמירת פורמט הרווחים
             def format_value_preserve_spaces(original_part, new_value):
@@ -636,33 +686,34 @@ class InsuranceScraper:
             # בניית השורה החדשה
             new_line = ':'.join(parts)
             
-            print(f"\n📝 שורה חדשה שתתווסף:")
+            print(f"\nשורה מעודכנת:")
             print(f"   {new_line[:100]}...")
             
-            # וידוא שהשורה שלפני המיקום החדש מסתיימת ב-newline
-            if last_00012_index >= 0 and last_00012_index < len(lines):
-                if not lines[last_00012_index].endswith('\n'):
-                    lines[last_00012_index] = lines[last_00012_index] + '\n'
-            
-            # הכנסת השורה החדשה מיד אחרי השורה האחרונה של 00012
-            print("\n💾 כותב קובץ מעודכן לתיקייה המקומית...")
-            print(f"   מכניס שורה חדשה במיקום {last_00012_index + 2} (אחרי השורה האחרונה של 00012)")
-            print(f"   סה\"כ שורות בקובץ החדש: {len(lines) + 1}")
-            
-            # הכנסת השורה החדשה במיקום הנכון
-            lines.insert(last_00012_index + 1, new_line + '\n')
+            print("\nכותב קובץ מעודכן לתיקייה המקומית...")
+            if replace_existing:
+                lines[last_00012_index] = new_line + '\n'
+                print(f"   מחליף שורה קיימת במיקום {last_00012_index + 1}")
+            else:
+                if last_00012_index >= 0 and last_00012_index < len(lines):
+                    if not lines[last_00012_index].endswith('\n'):
+                        lines[last_00012_index] = lines[last_00012_index] + '\n'
+                lines.insert(last_00012_index + 1, new_line + '\n')
+                print(f"   מוסיף שורה חדשה במיקום {last_00012_index + 2}")
+                print(f"   סה\"כ שורות בקובץ החדש: {len(lines)}")
             
             # כתיבת הקובץ המעודכן לתיקייה היעד
             with open(par_rech_output_path, 'w', encoding='cp862') as f:
                 f.writelines(lines)
             
-            print(f"\n✅✅✅ קובץ par_rech.dat עודכן בהצלחה! ✅✅✅")
-            print(f"📂 נקרא מ: {par_rech_source_path}")
-            print(f"📁 נשמר ב: {par_rech_output_path}")
-            print("="*60 + "\n")
+            print(f"קובץ par_rech.dat עודכן בהצלחה")
+            print(f"נקרא מ: {par_rech_source_path}")
+            print(f"נשמר ב: {par_rech_output_path}")
+            print("=" * 60 + "\n")
+            return True
             
         except Exception as e:
-            print(f"\n❌❌❌ שגיאה בעדכון par_rech.dat: {str(e)} ❌❌❌")
+            print(f"ERROR: שגיאה בעדכון par_rech.dat: {str(e)}")
             import traceback
             traceback.print_exc()
-            print("="*60 + "\n")
+            print("=" * 60 + "\n")
+            return False
