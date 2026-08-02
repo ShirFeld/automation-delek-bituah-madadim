@@ -548,68 +548,80 @@ class MainApplication:
         )
         status_label.pack(side='right', padx=15, pady=2)
         
-        # פונקציה לעדכון סטטוס
+        # פונקציה לעדכון סטטוס (thread-safe – חייב main thread ב-Tkinter)
         def update_status(message):
-            status_label.config(text=message)
-            self.root.update()
+            self.root.after(0, lambda m=message: status_label.config(text=m))
         
-        # פונקציה להצגת תוצאות
+        # פונקציה להצגת תוצאות (thread-safe)
         def display_results(message):
-            result_text.insert(tk.END, message + "\n")
-            result_text.see(tk.END)
-            self.root.update()
+            def _append(m=message):
+                result_text.insert(tk.END, m + "\n")
+                result_text.see(tk.END)
+            self.root.after(0, _append)
         
 
 
         # פונקציה לשליפה משולבת עם יצירת MDB
         def start_combined_scraping():
             combined_button.config(state='disabled', text="מעבד כל התרחישים...")
+            button_text = "🚀 שליפה מלאה - כל התרחישים (37 תרחישים)"
             
             def scrape_task():
                 scraper = None
+                results = {}
                 try:
                     import sys
                     import os
                     sys.path.append(os.path.join(os.path.dirname(__file__), 'BituahRechev'))
                     from BituahRechev.insurance_scraper import InsuranceScraper
                     
-                    # יצירת scraper
                     scraper = InsuranceScraper()
-                    
-                    # קריאה לפונקציה המקיפה שמבצעת את כל התהליך
                     results = scraper.scrape_all_insurance_data(
                         update_callback=update_status,
                         display_callback=display_results
                     )
-                    
-                    # הצגת הודעת סיכום
-                    if results['total_success'] > 0:
-                        from tkinter import messagebox
-                        msg = f"שליפה מלאה הושלמה!\n"
-                        msg += f"רכב פרטי: {results['private_success']}/24\n"
-                        msg += f"רכב מסחרי: {results['commercial_success']}/10\n"
-                        msg += f"רכב מיוחד: {results['special_success']}/3\n"
-                        msg += f"סך הכל: {results['total_success']}/37 תרחישים"
-                        if results['image_path']:
-                            msg += f"\n\n📷 טבלאות: {results['image_path']}"
-                        if results['mdb_path']:
-                            msg += f"\n📊 MDB: {results['mdb_path']}"
-                        if results.get('par_rech_updated'):
-                            msg += f"\n📋 par_rech.dat עודכן"
-                        messagebox.showinfo("הצלחה", msg)
-                    else:
-                        from tkinter import messagebox
-                        messagebox.showerror("שגיאה", "לא ניתן להגדיר דפדפן או לא נמצאו נתונים")
-                
                 except Exception as e:
                     display_results(f"❌ שגיאה: {str(e)}")
-                    from tkinter import messagebox
-                    messagebox.showerror("שגיאה", f"שגיאה: {str(e)}")
-                    
+                    results = {'error': str(e), 'total_success': 0}
                 finally:
                     if scraper:
                         scraper.cleanup()
-                    combined_button.config(state='normal', text="🚀 שליפה מלאה - כל התרחישים (37 תרחישים)")
+
+                    def finish_ui():
+                        from tkinter import messagebox
+                        combined_button.config(state='normal', text=button_text)
+                        if results.get('error'):
+                            messagebox.showerror("שגיאה", f"שגיאה: {results['error']}")
+                        elif results.get('insufficient_data'):
+                            msg = (
+                                f"לא נשלפו נתונים ({results.get('scraped_count', 0)}/37).\n"
+                                f"לא נוצר KNE ולא עודכן par_rech.\n\n"
+                                f"בדקי ש-Chrome פועל ונסי שוב."
+                            )
+                            messagebox.showwarning("אין נתונים", msg)
+                        elif results.get('total_success', 0) > 0:
+                            msg = f"שליפה הושלמה!\n"
+                            msg += f"רכב פרטי: {results.get('private_success', 0)}/24\n"
+                            msg += f"רכב מסחרי: {results.get('commercial_success', 0)}/10\n"
+                            msg += f"רכב מיוחד: {results.get('special_success', 0)}/3\n"
+                            msg += f"סך הכל: {results.get('total_success', 0)}/37 תרחישים"
+                            if results.get('partial_data'):
+                                msg += f"\n\nשים לב: נתונים חלקיים - הקבצים נוצרו עם מה שנשלף."
+                            if results.get('image_path'):
+                                msg += f"\n\n📷 טבלאות: {results['image_path']}"
+                            if results.get('mdb_path'):
+                                msg += f"\n📊 MDB: {results['mdb_path']}"
+                            elif not results.get('partial_data'):
+                                msg += f"\n\n⚠️ KNE לא נוצר - בדקי את הלוג"
+                            if results.get('par_rech_updated'):
+                                msg += f"\n📋 par_rech.dat עודכן"
+                            elif results.get('mdb_path'):
+                                msg += f"\n\n⚠️ par_rech.dat לא עודכן - בדקי את הלוג"
+                            messagebox.showinfo("הושלם", msg)
+                        else:
+                            messagebox.showerror("שגיאה", "לא ניתן להגדיר דפדפן או לא נמצאו נתונים")
+
+                    self.root.after(0, finish_ui)
             
             threading.Thread(target=scrape_task, daemon=True).start()
 

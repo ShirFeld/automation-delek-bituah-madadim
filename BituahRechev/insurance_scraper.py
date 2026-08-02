@@ -20,6 +20,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
 
+def _import_mdb_module():
+    """ייבוא simple_mdb_creator – עובד גם מ-EXE וגם מהקוד."""
+    try:
+        from BituahRechev import simple_mdb_creator as mdb
+    except ImportError:
+        import simple_mdb_creator as mdb
+    return mdb
+
+
 def print(*args, **kwargs):
     """הדפסה בטוחה ב-Windows (מונע UnicodeEncodeError מאימוג'י בטרמינל)."""
     try:
@@ -151,24 +160,69 @@ class InsuranceScraper:
                 'special_vehicle': special_results
             }
 
-            from simple_mdb_creator import count_scraped_insurance_prices, has_sufficient_insurance_data
+            mdb = _import_mdb_module()
+            count_scraped_insurance_prices = mdb.count_scraped_insurance_prices
+            has_sufficient_insurance_data = mdb.has_sufficient_insurance_data
+
+            # ניסיון חוזר לתרחישים שנכשלו (למשל נגרר)
+            insurance_data = self._retry_missing_insurance_scenarios(
+                insurance_data,
+                display_callback=display_callback,
+                max_rounds=2,
+            )
+
+            private_results = insurance_data.get('private_car') or {}
+            commercial_results = insurance_data.get('commercial_car') or {}
+            special_results = insurance_data.get('special_vehicle') or {}
+            results['private_success'] = sum(
+                sum(1 for p in group.values() if p is not None)
+                for group in private_results.values() if group
+            )
+            results['commercial_success'] = sum(
+                sum(1 for p in group.values() if p is not None)
+                for group in commercial_results.values() if group
+            )
+            results['special_success'] = sum(1 for p in special_results.values() if p is not None)
+            results['total_success'] = (
+                results['private_success'] + results['commercial_success'] + results['special_success']
+            )
+            if display_callback:
+                display_callback(
+                    f"\nאחרי ניסיונות חוזרים: {results['total_success']}/37 "
+                    f"(פרטי {results['private_success']}/24, "
+                    f"מסחרי {results['commercial_success']}/10, "
+                    f"מיוחד {results['special_success']}/3)"
+                )
+
             scraped_count = count_scraped_insurance_prices(insurance_data)
             if display_callback:
                 display_callback(f"נשלפו {scraped_count}/37 מחירים")
 
             if not has_sufficient_insurance_data(insurance_data):
-                msg = f"לא נשלפו מספיק נתונים ({scraped_count}/37) - לא יוצרים MDB ולא מעדכנים par_rech"
+                msg = f"לא נשלפו נתונים כלל ({scraped_count}/37) - לא יוצרים קבצים"
                 print(f"WARNING: {msg}")
                 if display_callback:
                     display_callback(f"WARNING: {msg}")
                 if update_callback:
-                    update_callback(f"חסרים נתונים: {scraped_count}/37")
+                    update_callback(f"אין נתונים: {scraped_count}/37")
+                results['insufficient_data'] = True
+                results['scraped_count'] = scraped_count
                 return results
+
+            if scraped_count < 37:
+                msg = f"נתונים חלקיים ({scraped_count}/37) - יוצרים KNE ו-par_rech בכל זאת"
+                print(f"WARNING: {msg}")
+                if display_callback:
+                    display_callback(f"WARNING: {msg}")
+                results['partial_data'] = True
+                results['scraped_count'] = scraped_count
             
             # שמירת תמונה
             if display_callback:
                 display_callback("📊 יוצר טבלאות...")
+            print("STEP: save_tables_as_image...")
             results['image_path'] = self.save_tables_as_image(insurance_data)
+            print(f"STEP: save_tables_as_image done -> {results['image_path']}")
             if results['image_path'] and display_callback:
                 display_callback(f"📷 טבלאות נשמרו: {results['image_path']}")
             
@@ -178,7 +232,9 @@ class InsuranceScraper:
             if update_callback:
                 update_callback("יוצר קובץ MDB...")
             
+            print("STEP: create_mdb_database...")
             results['mdb_path'] = self.create_mdb_database(insurance_data)
+            print(f"STEP: create_mdb_database done -> {results['mdb_path']}")
             if results['mdb_path'] and display_callback:
                 display_callback(f"✅ קובץ MDB נוצר: {results['mdb_path']}")
                 display_callback("📋 הקובץ כולל 3 טבלאות:")
@@ -194,7 +250,9 @@ class InsuranceScraper:
             if update_callback:
                 update_callback("מעדכן par_rech.dat...")
             
+            print("STEP: update_par_rech_file...")
             results['par_rech_updated'] = self.update_par_rech_file(insurance_data)
+            print(f"STEP: update_par_rech_file done -> {results['par_rech_updated']}")
             if results['par_rech_updated'] and display_callback:
                 display_callback("קובץ par_rech.dat עודכן בהצלחה")
             elif display_callback:
@@ -206,6 +264,9 @@ class InsuranceScraper:
             
         except Exception as e:
             print(f"שגיאה בשליפה מקיפה: {e}")
+            import traceback
+            traceback.print_exc()
+            results['error'] = str(e)
             if display_callback:
                 display_callback(f"❌ שגיאה: {str(e)}")
         
@@ -218,11 +279,40 @@ class InsuranceScraper:
             self.driver.get(url)
             time.sleep(2)
 
-    def _press_compare(self):
+    def _press_compare(self, wait_seconds=12):
         self.driver.find_element(By.ID, 'press_to_compare').click()
-        time.sleep(12)  # Increased wait time for commercial vehicles
+        time.sleep(wait_seconds)
 
-    def _extract_harel_price(self, price_column_index=None):
+    def _wait_for_harel_row(self, timeout=25):
+        """ממתין להופעת שורת הראל בטבלת התוצאות."""
+        harel_selectors = [
+            "//td[contains(normalize-space(.), 'הראל')]",
+            "//td[contains(text(), 'הראל חברה לביטוח')]",
+            "//td[contains(text(), 'הראל')]",
+        ]
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            for selector in harel_selectors:
+                if self.driver.find_elements(By.XPATH, selector):
+                    return True
+            time.sleep(1)
+        return False
+
+    def _extract_harel_price(self, price_column_index=None, max_attempts=4):
+        """מחלץ מחיר הראל עם המתנה וניסיונות חוזרים."""
+        self._wait_for_harel_row(timeout=20)
+        for attempt in range(1, max_attempts + 1):
+            if attempt > 1:
+                print(f"ניסיון {attempt}/{max_attempts} לחילוץ מחיר הראל...")
+                time.sleep(4)
+                self._wait_for_harel_row(timeout=10)
+            price = self._extract_harel_price_once(price_column_index)
+            if price is not None:
+                return price
+        print("ERROR: לא נמצא מחיר הראל")
+        return None
+
+    def _extract_harel_price_once(self, price_column_index=None):
         """
         מחלץ את תעריף הראל מתוך שורת התוצאות.
         
@@ -321,9 +411,126 @@ class InsuranceScraper:
                 except Exception as e:
                     print(f"⚠️ שגיאה בעיבוד שורת הראל: {e}")
                     continue
-            
-        print("❌ לא נמצא מחיר הראל")
+
         return None
+
+    def _retry_missing_insurance_scenarios(self, insurance_data, display_callback=None, max_rounds=2):
+        """מנסה שוב תרחישים שלא החזירו מחיר."""
+        mdb = _import_mdb_module()
+        count_scraped_insurance_prices = mdb.count_scraped_insurance_prices
+
+        private_scenarios = [
+            (19, 900, 2), (19, 1200, 2), (19, 1800, 2), (19, 2200, 2),
+            (22, 900, 4), (22, 1200, 4), (22, 1800, 4), (22, 2200, 4),
+            (25, 900, 7), (25, 1200, 7), (25, 1800, 7), (25, 2200, 7),
+            (31, 900, 13), (31, 1200, 13), (31, 1800, 13), (31, 2200, 13),
+            (41, 900, 23), (41, 1200, 23), (41, 1800, 23), (41, 2200, 23),
+            (51, 900, 33), (51, 1200, 33), (51, 1800, 33), (51, 2200, 33),
+        ]
+        commercial_scenarios = [
+            (19, 4, 1), (19, 4.5, 1), (23, 4, 5), (23, 4.5, 5),
+            (25, 4, 7), (25, 4.5, 7), (43, 4, 17), (43, 4.5, 17), (52, 4, 26), (52, 4.5, 26),
+        ]
+        special_scenarios = [
+            ('Nigrar', '35', 'נגרר'),
+            ('Handasi', '4', 'הנדסי'),
+            ('Agricalture', '11', 'חקלא'),
+        ]
+
+        insurance_data.setdefault('private_car', {})
+        insurance_data.setdefault('commercial_car', {})
+        insurance_data.setdefault('special_vehicle', {})
+
+        for round_num in range(1, max_rounds + 1):
+            missing_count = 37 - count_scraped_insurance_prices(insurance_data)
+            if missing_count <= 0:
+                break
+
+            msg = f"ניסיון חוזר {round_num}/{max_rounds} - חסרים {missing_count} מחירים..."
+            print(msg)
+            if display_callback:
+                display_callback(msg)
+
+            for age, vol, lic in private_scenarios:
+                group = self._private_age_group(age)
+                col = self._private_col(vol)
+                if insurance_data['private_car'].get(group, {}).get(col):
+                    continue
+                try:
+                    self._goto()
+                    Select(self.driver.find_element(By.ID, 'ddlSheets')).select_by_value('1')
+                    time.sleep(1)
+                    self._fill_common(age, lic)
+                    vol_el = self.driver.find_element(By.ID, 'A')
+                    if vol_el.tag_name == 'select':
+                        Select(vol_el).select_by_value(self._private_val(vol))
+                    else:
+                        vol_el.clear()
+                        vol_el.click()
+                        vol_el.send_keys(str(vol))
+                    time.sleep(1)
+                    self._press_compare()
+                    price = self._extract_harel_price()
+                    if price is not None:
+                        insurance_data['private_car'].setdefault(group, {})[col] = price
+                        print(f"retry OK private {group}/{col}: {price}")
+                except Exception as e:
+                    print(f"retry failed private {group}/{col}: {e}")
+
+            for age, weight, lic in commercial_scenarios:
+                group = self._commercial_group(age)
+                col = 'עד 4000 (כולל)' if weight == 4 else 'מעל 4000'
+                if insurance_data['commercial_car'].get(group, {}).get(col):
+                    continue
+                try:
+                    self._goto()
+                    Select(self.driver.find_element(By.ID, 'ddlSheets')).select_by_value('5')
+                    time.sleep(1)
+                    self._fill_common(age, lic)
+                    w = self.driver.find_element(By.ID, 'A')
+                    if w.tag_name == 'select':
+                        Select(w).select_by_value('1' if weight == 4 else '2')
+                    else:
+                        w.clear()
+                        w.send_keys(str(weight))
+                    self._press_compare()
+                    price = self._extract_harel_price()
+                    if price is not None:
+                        insurance_data['commercial_car'].setdefault(group, {})[col] = price
+                        print(f"retry OK commercial {group}/{col}: {price}")
+                except Exception as e:
+                    print(f"retry failed commercial {group}/{col}: {e}")
+
+            for key, val, fallback_text in special_scenarios:
+                if insurance_data['special_vehicle'].get(key):
+                    continue
+                try:
+                    self._goto()
+                    Select(self.driver.find_element(By.ID, 'ddlSheets')).select_by_value('7')
+                    time.sleep(1)
+                    self._fill_common(19, 2)
+                    dropdown = self.driver.find_element(By.ID, 'A')
+                    sel = Select(dropdown)
+                    try:
+                        sel.select_by_value(val)
+                    except Exception:
+                        selected = False
+                        for opt in sel.options:
+                            if fallback_text in (opt.text or ''):
+                                sel.select_by_visible_text(opt.text)
+                                selected = True
+                                break
+                        if not selected:
+                            raise
+                    self._press_compare(wait_seconds=18)
+                    price = self._extract_harel_price(max_attempts=5)
+                    if price is not None:
+                        insurance_data['special_vehicle'][key] = price
+                        print(f"retry OK special {key}: {price}")
+                except Exception as e:
+                    print(f"retry failed special {key}: {e}")
+
+        return insurance_data
                 
     def _fill_common(self, age, lic):
         try:
@@ -462,9 +669,9 @@ class InsuranceScraper:
                             break
                     if not selected:
                         raise
-                self._press_compare()
+                self._press_compare(wait_seconds=18)
                 # תמיד מחלץ לפי עמודת "תעריף בש\"ח" (לא מדד שירות)
-                price = self._extract_harel_price()
+                price = self._extract_harel_price(max_attempts=5)
                 res[key] = price
                 print(f"📊 תוצאה {key}: {price}")
                 # reset
@@ -479,8 +686,13 @@ class InsuranceScraper:
     # outputs
     def save_tables_as_image(self, insurance_data=None, save_path=None):
         try:
-            from simple_mdb_creator import prepare_all_tables_data, get_bituah_effective_dates
+            import matplotlib
+            matplotlib.use('Agg')
             import matplotlib.pyplot as plt
+
+            mdb = _import_mdb_module()
+            prepare_all_tables_data = mdb.prepare_all_tables_data
+            get_bituah_effective_dates = mdb.get_bituah_effective_dates
             
             # אם לא סופק נתיב, נשתמש בנתיב מקובץ הקונפיג
             if save_path is None:
@@ -530,11 +742,14 @@ class InsuranceScraper:
             return image_path
         except Exception as e:
             print(f"❌ שגיאה ביצירת תמונה: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def create_mdb_database(self, insurance_data=None, save_path=None):
         try:
-            from simple_mdb_creator import create_insurance_files
+            mdb = _import_mdb_module()
+            create_insurance_files = mdb.create_insurance_files
             
             # אם לא סופק נתיב, נשתמש בנתיב מקובץ הקונפיג
             if save_path is None:
@@ -543,6 +758,8 @@ class InsuranceScraper:
             return create_insurance_files(save_path, insurance_data)
         except Exception as e:
             print(f"❌ שגיאה ביצירת MDB: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def update_par_rech_file(self, insurance_data):
@@ -552,22 +769,40 @@ class InsuranceScraper:
             print("מתחיל עדכון par_rech.dat")
             print("=" * 60)
 
-            from simple_mdb_creator import has_sufficient_insurance_data
-            if not has_sufficient_insurance_data(insurance_data):
-                print("WARNING: לא מספיק נתונים לעדכון par_rech.dat")
+            mdb = _import_mdb_module()
+            if mdb.count_scraped_insurance_prices(insurance_data) < 1:
+                print("WARNING: אין נתונים לעדכון par_rech.dat")
                 return False
 
-            # נתיב קריאה - מהשרת, עם fallback לקובץ מקומי
+            # נתיב קריאה - מהשרת, עם fallback לקובץ מקומי (העדכני ביותר)
             par_rech_source_path = config.BITUAH_RECHEV_PARAM_SOURCE_FILE
             local_par_rech = os.path.join(config.BITUAH_RECHEV_OUTPUT_PATH, "par_rech.dat")
             print(f"נתיב מקור (קריאה): {par_rech_source_path}")
+
+            def _last_00012_date(path):
+                if not os.path.exists(path):
+                    return None
+                with open(path, 'r', encoding='cp862') as f:
+                    lines = f.readlines()
+                for line in reversed(lines):
+                    if line.startswith('00012:'):
+                        return line.split(':')[1].strip()
+                return None
+
+            server_date = _last_00012_date(par_rech_source_path)
+            local_date = _last_00012_date(local_par_rech)
+            if local_date and (not server_date or local_date > server_date):
+                par_rech_source_path = local_par_rech
+                print(f"משתמש בקובץ מקומי (עדכני יותר: {local_date}): {par_rech_source_path}")
+            elif os.path.exists(par_rech_source_path):
+                print(f"משתמש בקובץ מהשרת (תאריך אחרון: {server_date})")
             
             # נתיב כתיבה - לתיקייה המקומית
             par_rech_output_path = local_par_rech
             print(f"נתיב יעד (כתיבה): {par_rech_output_path}")
             
             if not os.path.exists(par_rech_source_path):
-                print(f"WARNING: קובץ מקור לא נמצא בשרת: {par_rech_source_path}")
+                print(f"WARNING: קובץ מקור לא נמצא בשרת: {config.BITUAH_RECHEV_PARAM_SOURCE_FILE}")
                 if os.path.exists(local_par_rech):
                     par_rech_source_path = local_par_rech
                     print(f"משתמש בקובץ מקומי כמקור: {par_rech_source_path}")
@@ -604,8 +839,7 @@ class InsuranceScraper:
             print(f"📄 שורה: {last_00012_line[:80]}...")
             
             # קביעת תאריך חדש (חודש הבא) - אותה לוגיקה כמו KNE/MDB
-            from simple_mdb_creator import get_bituah_effective_dates
-            next_month, _, _ = get_bituah_effective_dates()
+            next_month, _, _ = mdb.get_bituah_effective_dates()
             new_date = f"{next_month.strftime('%y/%m')}"
             print(f"תאריך חדש: {new_date}")
 
