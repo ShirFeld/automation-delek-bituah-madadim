@@ -78,8 +78,8 @@ def count_scraped_insurance_prices(insurance_data):
     return count
 
 
-def has_sufficient_insurance_data(insurance_data, minimum=37):
-    """בודק שיש מספיק נתונים לפני יצירת MDB / עדכון par_rech."""
+def has_sufficient_insurance_data(insurance_data, minimum=1):
+    """בודק שיש לפחות מחיר אחד לפני יצירת קבצים."""
     return count_scraped_insurance_prices(insurance_data) >= minimum
 
 
@@ -104,6 +104,181 @@ def _access_effective_date_for_com(access_app, effective_date_str):
     """
     dt = datetime.strptime(effective_date_str, "%d/%m/%Y")
     return access_app.Eval(f"DateSerial({dt.year}, {dt.month}, {dt.day})")
+
+
+COMMERCIAL_AGES = [17, 21, 24, 40, 50]
+COMMERCIAL_AGE_GROUPS = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
+PRIVATE_AGES = [17, 21, 24, 30, 40, 50]
+PRIVATE_AGE_GROUPS = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
+PRIVATE_ENGINE_KEYS = ['עד 1050', 'מ-1051 עד 1550', 'מ-1551 עד 2050', 'מ-2051 ומעלה']
+COMMERCIAL_WEIGHT_KEYS = ['עד 4000 (כולל)', 'מעל 4000']
+
+
+def _to_int_or_none(value):
+    if value is None:
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _pick_merged_value(scraped, fallback):
+    """מחיר חדש מנצח; אחרת נשאר ערך מה-template (כמו par_rech.dat)."""
+    if scraped is not None:
+        return _to_int_or_none(scraped)
+    return _to_int_or_none(fallback)
+
+
+def _empty_mdb_fallback():
+    return {
+        'special': {'Nigrar': None, 'Handasi': None, 'Agricalture': None},
+        'commercial': {},
+        'private': {},
+    }
+
+
+def _read_mdb_fallback_from_db(db):
+    """קורא שורות קיימות מה-MDB לפני DELETE – לשימוש כ-fallback."""
+    fallback = _empty_mdb_fallback()
+    try:
+        rs = db.OpenRecordset("tblBituachHova_edit")
+        if not rs.EOF:
+            fallback['special'] = {
+                'Nigrar': rs.Fields("Nigrar").Value,
+                'Handasi': rs.Fields("Handasi").Value,
+                'Agricalture': rs.Fields("Agricalture").Value,
+            }
+        rs.Close()
+    except Exception as e:
+        print(f"WARNING: לא ניתן לקרוא fallback מ-tblBituachHova_edit: {e}")
+
+    try:
+        rs = db.OpenRecordset("tblBituachHovaMishari_edit")
+        while not rs.EOF:
+            age = int(rs.Fields("Age").Value)
+            fallback['commercial'][age] = {
+                'Ad1': rs.Fields("Ad1").Value,
+                'Ad2': rs.Fields("Ad2").Value,
+            }
+            rs.MoveNext()
+        rs.Close()
+    except Exception as e:
+        print(f"WARNING: לא ניתן לקרוא fallback מ-tblBituachHovaMishari_edit: {e}")
+
+    try:
+        rs = db.OpenRecordset("tblBituachHovaPrati_edit")
+        while not rs.EOF:
+            age = int(rs.Fields("Age").Value)
+            fallback['private'][age] = {
+                'Ad1': rs.Fields("Ad1").Value,
+                'Ad2': rs.Fields("Ad2").Value,
+                'Ad3': rs.Fields("Ad3").Value,
+                'Ad4': rs.Fields("Ad4").Value,
+            }
+            rs.MoveNext()
+        rs.Close()
+    except Exception as e:
+        print(f"WARNING: לא ניתן לקרוא fallback מ-tblBituachHovaPrati_edit: {e}")
+
+    return fallback
+
+
+def _read_mdb_fallback_from_file(mdb_path):
+    if not HAS_WIN32COM or not os.path.exists(mdb_path):
+        return _empty_mdb_fallback()
+    pythoncom.CoInitialize()
+    try:
+        access_app = win32com.client.Dispatch("Access.Application")
+        access_app.OpenCurrentDatabase(mdb_path)
+        fallback = _read_mdb_fallback_from_db(access_app.CurrentDb())
+        access_app.CloseCurrentDatabase()
+        access_app.Quit()
+        print(f"OK נקראו ערכי fallback מ-{os.path.basename(mdb_path)}")
+        return fallback
+    except Exception as e:
+        print(f"WARNING: לא ניתן לקרוא fallback מ-{mdb_path}: {e}")
+        return _empty_mdb_fallback()
+    finally:
+        pythoncom.CoUninitialize()
+
+
+def build_merged_mdb_rows(effective_date, insurance_data, fallback=None):
+    """
+    בונה את כל השורות ל-MDB: 1 מיוחד + 5 מסחרי + 6 פרטי.
+    ערכים חדשים מה-scrape מחליפים; חסרים נשארים מה-template (כמו par_rech).
+    """
+    if fallback is None:
+        fallback = _empty_mdb_fallback()
+
+    special_fb = fallback.get('special') or {}
+    special_sc = (insurance_data or {}).get('special_vehicle') or {}
+    special_row = (
+        effective_date,
+        _pick_merged_value(special_sc.get('Nigrar'), special_fb.get('Nigrar')),
+        _pick_merged_value(special_sc.get('Handasi'), special_fb.get('Handasi')),
+        _pick_merged_value(special_sc.get('Agricalture'), special_fb.get('Agricalture')),
+    )
+
+    commercial_rows = []
+    commercial_sc = (insurance_data or {}).get('commercial_car') or {}
+    for i, age in enumerate(COMMERCIAL_AGES):
+        age_group = COMMERCIAL_AGE_GROUPS[i]
+        age_fb = (fallback.get('commercial') or {}).get(age) or {}
+        age_sc = commercial_sc.get(age_group) or {}
+        commercial_rows.append((
+            effective_date,
+            age,
+            _pick_merged_value(age_sc.get(COMMERCIAL_WEIGHT_KEYS[0]), age_fb.get('Ad1')),
+            _pick_merged_value(age_sc.get(COMMERCIAL_WEIGHT_KEYS[1]), age_fb.get('Ad2')),
+        ))
+
+    private_rows = []
+    private_sc = (insurance_data or {}).get('private_car') or {}
+    ad_fields = ['Ad1', 'Ad2', 'Ad3', 'Ad4']
+    for i, age in enumerate(PRIVATE_AGES):
+        age_group = PRIVATE_AGE_GROUPS[i]
+        age_fb = (fallback.get('private') or {}).get(age) or {}
+        age_sc = private_sc.get(age_group) or {}
+        ads = [
+            _pick_merged_value(age_sc.get(PRIVATE_ENGINE_KEYS[j]), age_fb.get(ad_fields[j]))
+            for j in range(4)
+        ]
+        private_rows.append((effective_date, age, *ads))
+
+    return {
+        'special': special_row,
+        'commercial': commercial_rows,
+        'private': private_rows,
+    }
+
+
+def _sql_value(value):
+    return 'NULL' if value is None else str(value)
+
+
+def _insert_merged_rows_sql(access_app, effective_date, merged):
+    """מכניס את כל 12 השורות לטבלאות Access (לאחר CREATE TABLE)."""
+    _, nigrar, handasi, agricalture = merged['special']
+    access_app.DoCmd.RunSQL(f"""
+        INSERT INTO tblBituachHova_edit (EffectiveDate, Nigrar, Handasi, Agricalture)
+        VALUES ('{effective_date}', {_sql_value(nigrar)}, {_sql_value(handasi)}, {_sql_value(agricalture)})
+    """)
+    print(f"✅ הכניס נתונים לטבלה 1: {nigrar}, {handasi}, {agricalture}")
+
+    for _, age, ad1, ad2 in merged['commercial']:
+        access_app.DoCmd.RunSQL(f"""
+            INSERT INTO tblBituachHovaMishari_edit (EffectiveDate, Age, Ad1, Ad2)
+            VALUES ('{effective_date}', {age}, {_sql_value(ad1)}, {_sql_value(ad2)})
+        """)
+        print(f"✅ רכב מסחרי גיל {age}: {ad1}, {ad2}")
+
+    for _, age, ad1, ad2, ad3, ad4 in merged['private']:
+        access_app.DoCmd.RunSQL(f"""
+            INSERT INTO tblBituachHovaPrati_edit (EffectiveDate, Age, Ad1, Ad2, Ad3, Ad4)
+            VALUES ('{effective_date}', {age}, {_sql_value(ad1)}, {_sql_value(ad2)}, {_sql_value(ad3)}, {_sql_value(ad4)})
+        """)
+        print(f"✅ רכב פרטי גיל {age}: {ad1}, {ad2}, {ad3}, {ad4}")
 
 
 def _clear_access_table(db, table_name):
@@ -148,8 +323,10 @@ def create_insurance_files(save_path=None, insurance_data=None, mdb_filename=Non
 
         scraped_count = count_scraped_insurance_prices(insurance_data)
         if not has_sufficient_insurance_data(insurance_data):
-            print(f"WARNING: לא מספיק נתונים ליצירת MDB ({scraped_count}/37) - מדלג")
+            print(f"WARNING: אין נתונים ליצירת MDB ({scraped_count}/37) - מדלג")
             return None
+        if scraped_count < 37:
+            print(f"WARNING: נתונים חלקיים ({scraped_count}/37) - יוצר MDB עם מה שנשלף")
         
         print(f"🔍 מתחיל יצירת קבצי נתונים...")
         print(f"📂 נתיב: {save_path}")
@@ -324,36 +501,6 @@ def create_sqlite_file(save_path, month_year, effective_date, insurance_data, md
             """
             access_app.DoCmd.RunSQL(create_table1_sql)
         
-            # קבלת נתונים אמיתיים לטבלה הראשונה - רק נתונים אמיתיים!
-            nigrar_value = None
-            handasi_value = None
-            agricalture_value = None
-            
-            if insurance_data and 'special_vehicle' in insurance_data:
-                special_data = insurance_data['special_vehicle']
-                if 'Nigrar' in special_data and special_data['Nigrar']:
-                    nigrar_value = int(special_data['Nigrar'])  # המרה למספר שלם
-                if 'Handasi' in special_data and special_data['Handasi']:
-                    handasi_value = int(special_data['Handasi'])  # המרה למספר שלם
-                if 'Agricalture' in special_data and special_data['Agricalture']:
-                    agricalture_value = int(special_data['Agricalture'])  # המרה למספר שלם
-            
-            # הכנסת נתונים לטבלה 1 - רק אם יש נתונים אמיתיים
-            if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
-                # המרת None ל-NULL ב-SQL - חיוני! אחרת ה-INSERT נכשל ו-MDB לא נוצר
-                nigrar_sql = 'NULL' if nigrar_value is None else str(nigrar_value)
-                handasi_sql = 'NULL' if handasi_value is None else str(handasi_value)
-                agricalture_sql = 'NULL' if agricalture_value is None else str(agricalture_value)
-                insert1_sql = f"""
-                INSERT INTO tblBituachHova_edit (EffectiveDate, Nigrar, Handasi, Agricalture)
-                VALUES ('{effective_date}', {nigrar_sql}, {handasi_sql}, {agricalture_sql})
-                """
-                access_app.DoCmd.RunSQL(insert1_sql)
-                print("✅ הכניס נתונים לטבלה 1")
-            else:
-                print("⚠️ אין נתונים אמיתיים לרכב מיוחד - רק יוצר טבלה ריקה")
-            print("✅ טבלה 1 נוצרה עם נתונים")
-        
             # טבלה 2: tblBituachHovaMishari_edit (רכב מסחרי)
             print("🔧 יוצר טבלה 2: tblBituachHovaMishari_edit")
             create_table2_sql = """
@@ -365,37 +512,6 @@ def create_sqlite_file(save_path, month_year, effective_date, insurance_data, md
             )
             """
             access_app.DoCmd.RunSQL(create_table2_sql)
-        
-            commercial_ages = [17, 21, 24, 40, 50]
-            commercial_age_groups = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
-            
-            for i, age in enumerate(commercial_ages):
-                age_group = commercial_age_groups[i]
-                ad1_value = None
-                ad2_value = None
-                
-                if insurance_data and 'commercial_car' in insurance_data and age_group in insurance_data['commercial_car']:
-                    age_data = insurance_data['commercial_car'][age_group]
-                    ad1_value = age_data.get('עד 4000 (כולל)')
-                    ad2_value = age_data.get('מעל 4000')
-                    if ad1_value is not None and ad2_value is not None:
-                        # המרה למספרים שלמים
-                        ad1_value = int(ad1_value)
-                        ad2_value = int(ad2_value)
-                        print(f"📊 נתונים אמיתיים לרכב מסחרי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}")
-                    else:
-                        print(f"⚠️ נתונים חסרים לרכב מסחרי גיל {age_group} - מדלג")
-                        continue
-                else:
-                    print(f"⚠️ אין נתונים אמיתיים לרכב מסחרי גיל {age_group} - מדלג")
-                    continue
-                
-                insert2_sql = f"""
-                INSERT INTO tblBituachHovaMishari_edit (EffectiveDate, Age, Ad1, Ad2)
-                VALUES ('{effective_date}', {age}, {ad1_value}, {ad2_value})
-                """
-                access_app.DoCmd.RunSQL(insert2_sql)
-            print("✅ טבלה 2 נוצרה עם 5 שורות")
         
             # טבלה 3: tblBituachHovaPrati_edit (רכב פרטי)
             print("🔧 יוצר טבלה 3: tblBituachHovaPrati_edit")
@@ -410,43 +526,12 @@ def create_sqlite_file(save_path, month_year, effective_date, insurance_data, md
             )
             """
             access_app.DoCmd.RunSQL(create_table3_sql)
-            
-            private_ages = [17, 21, 24, 30, 40, 50]
-            private_age_groups = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
-            
-            for i, age in enumerate(private_ages):
-                age_group = private_age_groups[i]
-                ad1_value = None
-                ad2_value = None
-                ad3_value = None
-                ad4_value = None
-                
-                if insurance_data and 'private_car' in insurance_data and age_group in insurance_data['private_car']:
-                    age_data = insurance_data['private_car'][age_group]
-                    ad1_value = age_data.get('עד 1050')
-                    ad2_value = age_data.get('מ-1051 עד 1550')
-                    ad3_value = age_data.get('מ-1551 עד 2050')
-                    ad4_value = age_data.get('מ-2051 ומעלה')
-                    if ad1_value is not None and ad2_value is not None and ad3_value is not None and ad4_value is not None:
-                        # המרה למספרים שלמים
-                        ad1_value = int(ad1_value)
-                        ad2_value = int(ad2_value)
-                        ad3_value = int(ad3_value)
-                        ad4_value = int(ad4_value)
-                        print(f"📊 נתונים אמיתיים לרכב פרטי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}, Ad3={ad3_value}, Ad4={ad4_value}")
-                    else:
-                        print(f"⚠️ נתונים חסרים לרכב פרטי גיל {age_group} - מדלג")
-                        continue
-                else:
-                    print(f"⚠️ אין נתונים אמיתיים לרכב פרטי גיל {age_group} - מדלג")
-                    continue
-                
-                insert3_sql = f"""
-                INSERT INTO tblBituachHovaPrati_edit (EffectiveDate, Age, Ad1, Ad2, Ad3, Ad4)
-                VALUES ('{effective_date}', {age}, {ad1_value}, {ad2_value}, {ad3_value}, {ad4_value})
-                """
-                access_app.DoCmd.RunSQL(insert3_sql)
-            print("✅ טבלה 3 נוצרה עם 6 שורות")
+
+            template_path = os.path.join(save_path, "kne.mdb")
+            fallback = _read_mdb_fallback_from_file(template_path)
+            merged = build_merged_mdb_rows(effective_date, insurance_data, fallback)
+            _insert_merged_rows_sql(access_app, effective_date, merged)
+            print("✅ כל 3 הטבלאות נוצרו עם 12 שורות (1+5+6)")
             
             # שמירה וסגירה
             print("💾 Access מוכן - לא צריך Save()")
@@ -569,101 +654,53 @@ def create_mdb_from_template(mdb_path, effective_date, insurance_data, template_
             db = access_app.CurrentDb()
             access_date = _access_effective_date_for_com(access_app, effective_date)
             print(f"🗓️ תאריך שייכנס ל-MDB: {effective_date} (DateSerial)")
+
+            # קריאת ערכי fallback מה-template לפני מחיקה (כמו par_rech שומר ערכים קודמים)
+            fallback = _read_mdb_fallback_from_db(db)
+            merged = build_merged_mdb_rows(effective_date, insurance_data, fallback)
+
             for table_name in ["tblBituachHova_edit", "tblBituachHovaMishari_edit", "tblBituachHovaPrati_edit"]:
                 _clear_access_table(db, table_name)
-            
-            # הכנסת נתונים לטבלה 1: tblBituachHova_edit (רכב מיוחד)
-            nigrar_value = None
-            handasi_value = None
-            agricalture_value = None
-            
-            if insurance_data and 'special_vehicle' in insurance_data:
-                special_data = insurance_data['special_vehicle']
-                if 'Nigrar' in special_data and special_data['Nigrar']:
-                    nigrar_value = int(special_data['Nigrar'])
-                if 'Handasi' in special_data and special_data['Handasi']:
-                    handasi_value = int(special_data['Handasi'])
-                if 'Agricalture' in special_data and special_data['Agricalture']:
-                    agricalture_value = int(special_data['Agricalture'])
-            
-            if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
-                print("\n🔄 מכניס נתונים לטבלה 1 (רכב מיוחד)...")
-                recordset = db.OpenRecordset("tblBituachHova_edit")
-                recordset.AddNew()
-                recordset.Fields("EffectiveDate").Value = access_date
-                recordset.Fields("Nigrar").Value = nigrar_value
-                recordset.Fields("Handasi").Value = handasi_value
-                recordset.Fields("Agricalture").Value = agricalture_value
-                recordset.Update()
-                recordset.Close()
-                print(f"✅ הכניס נתונים לטבלה 1: {nigrar_value}, {handasi_value}, {agricalture_value}")
-            
-            # הכנסת נתונים לטבלה 2: tblBituachHovaMishari_edit (רכב מסחרי)
+
+            # טבלה 1: רכב מיוחד – תמיד שורה אחת
+            print("\n🔄 מכניס נתונים לטבלה 1 (רכב מיוחד)...")
+            _, nigrar_value, handasi_value, agricalture_value = merged['special']
+            recordset = db.OpenRecordset("tblBituachHova_edit")
+            recordset.AddNew()
+            recordset.Fields("EffectiveDate").Value = access_date
+            recordset.Fields("Nigrar").Value = nigrar_value
+            recordset.Fields("Handasi").Value = handasi_value
+            recordset.Fields("Agricalture").Value = agricalture_value
+            recordset.Update()
+            recordset.Close()
+            print(f"✅ הכניס נתונים לטבלה 1: {nigrar_value}, {handasi_value}, {agricalture_value}")
+
+            # טבלה 2: רכב מסחרי – תמיד 5 שורות
             print("\n🔄 מכניס נתונים לטבלה 2 (רכב מסחרי)...")
-            commercial_ages = [17, 21, 24, 40, 50]
-            commercial_age_groups = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
-            
             recordset2 = db.OpenRecordset("tblBituachHovaMishari_edit")
-            
-            for i, age in enumerate(commercial_ages):
-                age_group = commercial_age_groups[i]
-                ad1_value = None
-                ad2_value = None
-                
-                if insurance_data and 'commercial_car' in insurance_data and age_group in insurance_data['commercial_car']:
-                    age_data = insurance_data['commercial_car'][age_group]
-                    ad1_value = age_data.get('עד 4000 (כולל)')
-                    ad2_value = age_data.get('מעל 4000')
-                    if ad1_value is not None and ad2_value is not None:
-                        ad1_value = int(ad1_value)
-                        ad2_value = int(ad2_value)
-                        
-                        recordset2.AddNew()
-                        recordset2.Fields("EffectiveDate").Value = access_date
-                        recordset2.Fields("Age").Value = age
-                        recordset2.Fields("Ad1").Value = ad1_value
-                        recordset2.Fields("Ad2").Value = ad2_value
-                        recordset2.Update()
-                        print(f"✅ רכב מסחרי גיל {age}: {ad1_value}, {ad2_value}")
-            
+            for _, age, ad1_value, ad2_value in merged['commercial']:
+                recordset2.AddNew()
+                recordset2.Fields("EffectiveDate").Value = access_date
+                recordset2.Fields("Age").Value = age
+                recordset2.Fields("Ad1").Value = ad1_value
+                recordset2.Fields("Ad2").Value = ad2_value
+                recordset2.Update()
+                print(f"✅ רכב מסחרי גיל {age}: {ad1_value}, {ad2_value}")
             recordset2.Close()
-            
-            # הכנסת נתונים לטבלה 3: tblBituachHovaPrati_edit (רכב פרטי)
+
+            # טבלה 3: רכב פרטי – תמיד 6 שורות
             print("\n🔄 מכניס נתונים לטבלה 3 (רכב פרטי)...")
-            private_ages = [17, 21, 24, 30, 40, 50]
-            private_age_groups = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
-            
             recordset3 = db.OpenRecordset("tblBituachHovaPrati_edit")
-            
-            for i, age in enumerate(private_ages):
-                age_group = private_age_groups[i]
-                ad1_value = None
-                ad2_value = None
-                ad3_value = None
-                ad4_value = None
-                
-                if insurance_data and 'private_car' in insurance_data and age_group in insurance_data['private_car']:
-                    age_data = insurance_data['private_car'][age_group]
-                    ad1_value = age_data.get('עד 1050')
-                    ad2_value = age_data.get('מ-1051 עד 1550')
-                    ad3_value = age_data.get('מ-1551 עד 2050')
-                    ad4_value = age_data.get('מ-2051 ומעלה')
-                    if ad1_value is not None and ad2_value is not None and ad3_value is not None and ad4_value is not None:
-                        ad1_value = int(ad1_value)
-                        ad2_value = int(ad2_value)
-                        ad3_value = int(ad3_value)
-                        ad4_value = int(ad4_value)
-                        
-                        recordset3.AddNew()
-                        recordset3.Fields("EffectiveDate").Value = access_date
-                        recordset3.Fields("Age").Value = age
-                        recordset3.Fields("Ad1").Value = ad1_value
-                        recordset3.Fields("Ad2").Value = ad2_value
-                        recordset3.Fields("Ad3").Value = ad3_value
-                        recordset3.Fields("Ad4").Value = ad4_value
-                        recordset3.Update()
-                        print(f"✅ רכב פרטי גיל {age}: {ad1_value}, {ad2_value}, {ad3_value}, {ad4_value}")
-            
+            for _, age, ad1_value, ad2_value, ad3_value, ad4_value in merged['private']:
+                recordset3.AddNew()
+                recordset3.Fields("EffectiveDate").Value = access_date
+                recordset3.Fields("Age").Value = age
+                recordset3.Fields("Ad1").Value = ad1_value
+                recordset3.Fields("Ad2").Value = ad2_value
+                recordset3.Fields("Ad3").Value = ad3_value
+                recordset3.Fields("Ad4").Value = ad4_value
+                recordset3.Update()
+                print(f"✅ רכב פרטי גיל {age}: {ad1_value}, {ad2_value}, {ad3_value}, {ad4_value}")
             recordset3.Close()
             
             # סגירת הקובץ
@@ -714,37 +751,6 @@ def create_real_access_mdb(mdb_path, effective_date, insurance_data):
             access_app.DoCmd.RunSQL(create_table1_sql)
             print("✅ יצר טבלה 1")
             
-            # קבלת נתונים אמיתיים לטבלה הראשונה - רק נתונים אמיתיים!
-            nigrar_value = None
-            handasi_value = None
-            agricalture_value = None
-            
-            if insurance_data and 'special_vehicle' in insurance_data:
-                special_data = insurance_data['special_vehicle']
-                if 'Nigrar' in special_data and special_data['Nigrar']:
-                    nigrar_value = int(special_data['Nigrar'])  # המרה למספר שלם
-                if 'Handasi' in special_data and special_data['Handasi']:
-                    handasi_value = int(special_data['Handasi'])  # המרה למספר שלם
-                if 'Agricalture' in special_data and special_data['Agricalture']:
-                    agricalture_value = int(special_data['Agricalture'])  # המרה למספר שלם
-            
-            # הכנסת נתונים לטבלה 1 - רק אם יש נתונים אמיתיים
-            if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
-                # המרת None ל-NULL ב-SQL - חיוני! אחרת ה-INSERT נכשל ו-MDB לא נוצר
-                nigrar_sql = 'NULL' if nigrar_value is None else str(nigrar_value)
-                handasi_sql = 'NULL' if handasi_value is None else str(handasi_value)
-                agricalture_sql = 'NULL' if agricalture_value is None else str(agricalture_value)
-                insert1_sql = f"""
-                INSERT INTO tblBituachHova_edit 
-                (EffectiveDate, Nigrar, Handasi, Agricalture)
-                VALUES ('{effective_date}', {nigrar_sql}, {handasi_sql}, {agricalture_sql})
-                """
-                access_app.DoCmd.RunSQL(insert1_sql)
-                print("✅ הכניס נתונים לטבלה 1")
-            else:
-                print("⚠️ אין נתונים אמיתיים לרכב מיוחד - רק יוצר טבלה ריקה")
-            
-            # יצירת טבלה 2: tblBituachHovaMishari_edit
             create_table2_sql = """
             CREATE TABLE tblBituachHovaMishari_edit (
                 EffectiveDate TEXT(10),
@@ -756,39 +762,6 @@ def create_real_access_mdb(mdb_path, effective_date, insurance_data):
             access_app.DoCmd.RunSQL(create_table2_sql)
             print("✅ יצר טבלה 2")
             
-            # הכנסת נתונים לטבלה 2 (רכב מסחרי)
-            commercial_ages = [17, 21, 24, 40, 50]
-            commercial_age_groups = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
-            
-            for i, age in enumerate(commercial_ages):
-                age_group = commercial_age_groups[i]
-                ad1_value = None
-                ad2_value = None
-                
-                if insurance_data and 'commercial_car' in insurance_data and age_group in insurance_data['commercial_car']:
-                    age_data = insurance_data['commercial_car'][age_group]
-                    ad1_value = age_data.get('עד 4000 (כולל)')
-                    ad2_value = age_data.get('מעל 4000')
-                    if ad1_value is not None and ad2_value is not None:
-                        # המרה למספרים שלמים
-                        ad1_value = int(ad1_value)
-                        ad2_value = int(ad2_value)
-                        print(f"📊 נתונים אמיתיים לרכב מסחרי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}")
-                    else:
-                        print(f"⚠️ נתונים חסרים לרכב מסחרי גיל {age_group} - מדלג")
-                        continue
-                else:
-                    print(f"⚠️ אין נתונים אמיתיים לרכב מסחרי גיל {age_group} - מדלג")
-                    continue
-                
-                insert2_sql = f"""
-                INSERT INTO tblBituachHovaMishari_edit 
-                (EffectiveDate, Age, Ad1, Ad2)
-                VALUES ('{effective_date}', {age}, {ad1_value}, {ad2_value})
-                """
-                access_app.DoCmd.RunSQL(insert2_sql)
-            
-            # יצירת טבלה 3: tblBituachHovaPrati_edit
             create_table3_sql = """
             CREATE TABLE tblBituachHovaPrati_edit (
                 EffectiveDate TEXT(10),
@@ -801,44 +774,11 @@ def create_real_access_mdb(mdb_path, effective_date, insurance_data):
             """
             access_app.DoCmd.RunSQL(create_table3_sql)
             print("✅ יצר טבלה 3")
-            
-            # הכנסת נתונים לטבלה 3 (רכב פרטי)
-            private_ages = [17, 21, 24, 30, 40, 50]
-            private_age_groups = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
-            
-            for i, age in enumerate(private_ages):
-                age_group = private_age_groups[i]
-                ad1_value = None
-                ad2_value = None
-                ad3_value = None
-                ad4_value = None
-                
-                if insurance_data and 'private_car' in insurance_data and age_group in insurance_data['private_car']:
-                    age_data = insurance_data['private_car'][age_group]
-                    ad1_value = age_data.get('עד 1050')
-                    ad2_value = age_data.get('מ-1051 עד 1550')
-                    ad3_value = age_data.get('מ-1551 עד 2050')
-                    ad4_value = age_data.get('מ-2051 ומעלה')
-                    if ad1_value is not None and ad2_value is not None and ad3_value is not None and ad4_value is not None:
-                        # המרה למספרים שלמים
-                        ad1_value = int(ad1_value)
-                        ad2_value = int(ad2_value)
-                        ad3_value = int(ad3_value)
-                        ad4_value = int(ad4_value)
-                        print(f"📊 נתונים אמיתיים לרכב פרטי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}, Ad3={ad3_value}, Ad4={ad4_value}")
-                    else:
-                        print(f"⚠️ נתונים חסרים לרכב פרטי גיל {age_group} - מדלג")
-                        continue
-                else:
-                    print(f"⚠️ אין נתונים אמיתיים לרכב פרטי גיל {age_group} - מדלג")
-                    continue
-                
-                insert3_sql = f"""
-                INSERT INTO tblBituachHovaPrati_edit 
-                (EffectiveDate, Age, Ad1, Ad2, Ad3, Ad4)
-                VALUES ('{effective_date}', {age}, {ad1_value}, {ad2_value}, {ad3_value}, {ad4_value})
-                """
-                access_app.DoCmd.RunSQL(insert3_sql)
+
+            template_path = os.path.join(os.path.dirname(mdb_path), "kne.mdb")
+            fallback = _read_mdb_fallback_from_file(template_path)
+            merged = build_merged_mdb_rows(effective_date, insurance_data, fallback)
+            _insert_merged_rows_sql(access_app, effective_date, merged)
             
             # שמירה וסגירה - ללא Save() שגורם לשגיאה
             print("✅ Access מוכן - לא צריך Save()")
@@ -865,134 +805,30 @@ def create_real_access_mdb(mdb_path, effective_date, insurance_data):
         print(f"❌ שגיאה ביצירת Access 2000: {str(e)}")
         raise
 
-def prepare_all_tables_data(effective_date, insurance_data):
-    """הכנת נתוני כל הטבלאות"""
-    tables_data = {}
-    
+def prepare_all_tables_data(effective_date, insurance_data, fallback=None):
+    """הכנת נתוני כל הטבלאות – תמיד 1+5+6 שורות (עם fallback מה-template)."""
     print(f"🔍 מתחיל הכנת טבלאות...")
     print(f"📅 תאריך יעיל: {effective_date}")
-    print(f"📊 נתונים: {insurance_data}")
-    
-    # קבלת נתונים אמיתיים לטבלה הראשונה - רק נתונים אמיתיים!
-    nigrar_value = None
-    handasi_value = None
-    agricalture_value = None
-    
-    if insurance_data and 'special_vehicle' in insurance_data:
-        special_data = insurance_data['special_vehicle']
-        print(f"🚗 נתוני רכב מיוחד: {special_data}")
-        if 'Nigrar' in special_data and special_data['Nigrar']:
-            nigrar_value = special_data['Nigrar']
-        if 'Handasi' in special_data and special_data['Handasi']:
-            handasi_value = special_data['Handasi']
-        if 'Agricalture' in special_data and special_data['Agricalture']:
-            agricalture_value = special_data['Agricalture']
-    
-    # טבלה 1: tblBituachHova_edit
-    if nigrar_value is not None or handasi_value is not None or agricalture_value is not None:
-        # המרה למספרים שלמים (ללא נקודה עשרונית)
-        if nigrar_value is not None:
-            nigrar_value = int(nigrar_value)
-        if handasi_value is not None:
-            handasi_value = int(handasi_value)
-        if agricalture_value is not None:
-            agricalture_value = int(agricalture_value)
-        
-        tables_data['tblBituachHova_edit'] = {
-            'headers': ['EffectiveDate', 'Nigrar', 'Handasi', 'Agricalture'],
-            'rows': [(effective_date, nigrar_value, handasi_value, agricalture_value)]
-        }
-        print(f"✅ טבלה 1: {len(tables_data['tblBituachHova_edit']['rows'])} שורות")
-    else:
-        print("⚠️ אין נתונים לרכב מיוחד")
-        tables_data['tblBituachHova_edit'] = {
-            'headers': ['EffectiveDate', 'Nigrar', 'Handasi', 'Agricalture'],
-            'rows': []
-        }
-    
-    # בדיקה שיש נתונים לפחות בטבלה אחת
-    total_rows = len(tables_data['tblBituachHova_edit']['rows'])
-    if total_rows > 0:
-        print(f"✅ יש נתונים ברכב מיוחד: {total_rows} שורות")
-    else:
-        print("⚠️ אין נתונים ברכב מיוחד")
-    
 
-    
-    # טבלה 2: tblBituachHovaMishari_edit (רכב מסחרי) - רק נתונים אמיתיים!
-    commercial_ages = [17, 21, 24, 40, 50]
-    commercial_age_groups = ['17-20', '21-23', '24-39', '40-49', '50- ומעלה']
-    commercial_rows = []
-    
-    if insurance_data and 'commercial_car' in insurance_data:
-        for i, age in enumerate(commercial_ages):
-            age_group = commercial_age_groups[i]
-            ad1_value = None
-            ad2_value = None
-            
-            if age_group in insurance_data['commercial_car']:
-                age_data = insurance_data['commercial_car'][age_group]
-                ad1_value = age_data.get('עד 4000 (כולל)')
-                ad2_value = age_data.get('מעל 4000')
-                if ad1_value is not None and ad2_value is not None:
-                    # המרה למספרים שלמים
-                    ad1_value = int(ad1_value)
-                    ad2_value = int(ad2_value)
-                    print(f"📊 נתונים אמיתיים לרכב מסחרי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}")
-                    commercial_rows.append((effective_date, age, ad1_value, ad2_value))
-                else:
-                    print(f"⚠️ נתונים חסרים לרכב מסחרי גיל {age_group} - מדלג")
-            else:
-                print(f"⚠️ אין נתונים אמיתיים לרכב מסחרי גיל {age_group} - מדלג")
-    else:
-        print("⚠️ אין נתונים לרכב מסחרי")
-    
-    tables_data['tblBituachHovaMishari_edit'] = {
-        'headers': ['EffectiveDate', 'Age', 'Ad1', 'Ad2'],
-        'rows': commercial_rows
+    merged = build_merged_mdb_rows(effective_date, insurance_data, fallback)
+
+    tables_data = {
+        'tblBituachHova_edit': {
+            'headers': ['EffectiveDate', 'Nigrar', 'Handasi', 'Agricalture'],
+            'rows': [merged['special']],
+        },
+        'tblBituachHovaMishari_edit': {
+            'headers': ['EffectiveDate', 'Age', 'Ad1', 'Ad2'],
+            'rows': merged['commercial'],
+        },
+        'tblBituachHovaPrati_edit': {
+            'headers': ['EffectiveDate', 'Age', 'Ad1', 'Ad2', 'Ad3', 'Ad4'],
+            'rows': merged['private'],
+        },
     }
-    print(f"✅ טבלה 2: {len(commercial_rows)} שורות")
-    
-    # טבלה 3: tblBituachHovaPrati_edit (רכב פרטי) - רק נתונים אמיתיים!
-    private_ages = [17, 21, 24, 30, 40, 50]
-    private_age_groups = ['17-20', '21-23', '24-29', '30-39', '40-49', '50- ומעלה']
-    private_rows = []
-    
-    if insurance_data and 'private_car' in insurance_data:
-        for i, age in enumerate(private_ages):
-            age_group = private_age_groups[i]
-            ad1_value = None
-            ad2_value = None
-            ad3_value = None
-            ad4_value = None
-            
-            if age_group in insurance_data['private_car']:
-                age_data = insurance_data['private_car'][age_group]
-                ad1_value = age_data.get('עד 1050')
-                ad2_value = age_data.get('מ-1051 עד 1550')
-                ad3_value = age_data.get('מ-1551 עד 2050')
-                ad4_value = age_data.get('מ-2051 ומעלה')
-                if ad1_value is not None and ad2_value is not None and ad3_value is not None and ad4_value is not None:
-                    # המרה למספרים שלמים
-                    ad1_value = int(ad1_value)
-                    ad2_value = int(ad2_value)
-                    ad3_value = int(ad3_value)
-                    ad4_value = int(ad4_value)
-                    print(f"📊 נתונים אמיתיים לרכב פרטי גיל {age_group}: Ad1={ad1_value}, Ad2={ad2_value}, Ad3={ad3_value}, Ad4={ad4_value}")
-                    private_rows.append((effective_date, age, ad1_value, ad2_value, ad3_value, ad4_value))
-                else:
-                    print(f"⚠️ נתונים חסרים לרכב פרטי גיל {age_group} - מדלג")
-            else:
-                print(f"⚠️ אין נתונים אמיתיים לרכב פרטי גיל {age_group} - מדלג")
-    else:
-        print("⚠️ אין נתונים לרכב פרטי")
-    
-    tables_data['tblBituachHovaPrati_edit'] = {
-        'headers': ['EffectiveDate', 'Age', 'Ad1', 'Ad2', 'Ad3', 'Ad4'],
-        'rows': private_rows
-    }
-    print(f"✅ טבלה 3: {len(private_rows)} שורות")
-    
+    print(f"✅ טבלה 1: {len(tables_data['tblBituachHova_edit']['rows'])} שורות")
+    print(f"✅ טבלה 2: {len(tables_data['tblBituachHovaMishari_edit']['rows'])} שורות")
+    print(f"✅ טבלה 3: {len(tables_data['tblBituachHovaPrati_edit']['rows'])} שורות")
     return tables_data
 
 if __name__ == "__main__":
