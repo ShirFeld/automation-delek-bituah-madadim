@@ -63,10 +63,16 @@ DEFAULT_ENCODING = 'utf-8'
 MADADIM_DAY_THRESHOLD = 15
 MADADIM_TIME_THRESHOLD = (18, 30)  # (שעה, דקות)
 
+# Timeout לשליפת מדד BLS (ארה"ב). אחרי הזמן הזה Chrome נסגר וממשיכים בלי המדד.
+BLS_FETCH_TIMEOUT_SECONDS = 5
+
 
 # הגדרות אתרים חיצוניים
 
-# אתר הלמ"ס (מדדים)
+# API מדדי מחירים של הלמ"ס
+CBS_API_URL = "https://api.cbs.gov.il/index/data/price"
+
+# אתר הלמ"ס (מחולל מדדים)
 CBS_URL = "https://www.cbs.gov.il/he/Statistics/Pages/%D7%9E%D7%97%D7%95%D7%9C%D7%9C%D7%99%D7%9D/%D7%9E%D7%97%D7%95%D7%9C%D7%9C-%D7%9E%D7%97%D7%99%D7%A8%D7%99%D7%9D.aspx"
 
 # אתר BLS (מדד אמריקאי)

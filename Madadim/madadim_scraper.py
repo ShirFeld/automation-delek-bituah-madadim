@@ -1,14 +1,14 @@
 import os
-import random
+import time
+from datetime import datetime, time as dt_time
+
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from datetime import datetime, time as dt_time
-import time
-from datetime import datetime, timedelta, date
+from selenium.common.exceptions import TimeoutException
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,25 +31,12 @@ class MadadimScraper:
             "תשומה בבניה למסחר ולמשרדים": "800010"
         }
 
-        self.cbs_scenarios = [
-            "מדד המחירים לצרכן, לפי קבוצות צריכה ראשיות",
-            "מדד מחירי תשומה בבנייה למגורים",
-            "מדד מחירי תשומה בסלילה וגישור, לפי קבוצות ראשיות וקבוצות משניות",
-            "מדד מחירי תשומה בענף החקלאות, לפי קבוצות ראשיות וקבוצות משניות",
-            "מדד המחירים הסיטוניים של תפוקת התעשייה וכרייה וחציבה ליעדים מקומיים",
-            "מדד המחירים לצרכן, לפי קבוצות צריכה ראשיות ומשניות",
-            "מדד המחירים לצרכן של מוצרים ושירותים נבחרים",
-            "מדד המחירים לצרכן של מוצרים ושירותים נבחרים",
-            "מדד המחירים לצרכן של מוצרים ושירותים נבחרים",
-            "מדד מחירי תשומה באוטובוסים, כל האוכלוסייה",
-            "מדד מחירי תשומה בבנייה למסחר ולמשרדים,אחוז שינוי חודשי ושנתי,מינואר 2012"
-
-        ]
-        self.current_scenario_index = 0 
-        
-        # אתרי המקור - משתמש בURLים מקובץ הקונפיג
-        self.cbs_url = config.CBS_URL
+        self.cbs_api_url = config.CBS_API_URL
         self.bls_url = config.BLS_URL
+        self.cbs_api_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+        }
         
         # נתיב יעד לקבצים - משתמש בנתיב מקובץ הקונפיג
         self.target_path = config.MADADIM_OUTPUT_PATH
@@ -60,12 +47,11 @@ class MadadimScraper:
         self._driver_error = None
     
 
-    def get_previous_month_filename(self):
-        """חישוב שם הקובץ לפי החודש הקודם"""
+    def get_previous_period(self):
+        """מחזיר (year, month) של החודש הקודם לפי לוגיקת 15 בחודש / 18:30"""
         today = datetime.today()
         current_time = today.time()
 
-        # חישוב החודש הקודם
         if today.month == 1:
             prev_month = 12
             prev_year = today.year - 1
@@ -73,19 +59,20 @@ class MadadimScraper:
             prev_month = today.month - 1
             prev_year = today.year
 
-        # אם היום <= 15 והשעה לפני 18:30, נחזור עוד חודש אחורה
         if today.day <= 15 and current_time < dt_time(18, 30):
             prev_month -= 1
             if prev_month == 0:
                 prev_month = 12
-                prev_year -= 1  # אם ירדנו מדצמבר לינואר, גם השנה קופצת אחורה
+                prev_year -= 1
 
-        # פורמט MMYY
+        return prev_year, prev_month
+
+    def get_previous_month_filename(self):
+        """חישוב שם הקובץ לפי החודש הקודם"""
+        prev_year, prev_month = self.get_previous_period()
         month_str = f"{prev_month:02d}"
         year_str = f"{prev_year % 100:02d}"
-
-        filename = f"madadim{month_str}{year_str}.txt"
-        return filename
+        return f"madadim{month_str}{year_str}.txt"
 
     
     def get_file_path(self):
@@ -245,697 +232,230 @@ class MadadimScraper:
         """סגירת הדפדפן"""
         if self.driver:
             self.driver.quit()
+            self.driver = None
+            self.wait = None
 
-    def _switch_to_cbs_tool_frame(self):
-        """מעבר ל-iframe של מחולל המדדים (לא תמיד frame(0))."""
-        self.driver.switch_to.default_content()
-        time.sleep(1)
-
-        code_field_selectors = [
-            "input[ng-model='mainCtrl.codesearch']",
-            "input[ng-model*='codesearch']",
-            "input[placeholder*='קוד']",
-        ]
-
-        # ניסיון ישיר בדף הראשי
-        for selector in code_field_selectors:
-            if self.driver.find_elements(By.CSS_SELECTOR, selector):
-                print(f"OK נמצא שדה קוד בדף הראשי ({selector})")
-                return True
-
-        iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
-        print(f"נמצאו {len(iframes)} iframes, מחפש את מחולל המדדים...")
-        for index in range(len(iframes)):
-            try:
-                self.driver.switch_to.default_content()
-                self.driver.switch_to.frame(index)
-                for selector in code_field_selectors:
-                    if self.driver.find_elements(By.CSS_SELECTOR, selector):
-                        print(f"OK נמצא מחולל מדדים ב-iframe {index} ({selector})")
-                        return True
-            except Exception:
-                continue
-
-        self.driver.switch_to.default_content()
-        print("ERROR לא נמצא iframe של מחולל המדדים")
-        return False
-
-    def _select_search_by_code_mode(self):
-        """בחירת מצב חיפוש לפי קוד."""
-        from selenium.webdriver.common.action_chains import ActionChains
-
-        radio_selectors = [
-            (By.NAME, "7"),
-            (By.CSS_SELECTOR, "input[type='radio'][value='7']"),
-            (By.CSS_SELECTOR, "input[type='radio'][ng-value='7']"),
-            (By.XPATH, "//label[contains(., 'קוד')]/preceding-sibling::input[@type='radio']"),
-            (By.XPATH, "//label[contains(., 'קוד')]/input[@type='radio']"),
-        ]
-
-        for by, selector in radio_selectors:
-            try:
-                radio = self.wait.until(EC.presence_of_element_located((by, selector)))
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", radio)
-                time.sleep(0.5)
-                ActionChains(self.driver).move_to_element(radio).perform()
-                try:
-                    radio.click()
-                except Exception:
-                    self.driver.execute_script("arguments[0].click();", radio)
-                time.sleep(2)
-                if radio.is_selected() or radio.get_attribute("checked"):
-                    print(f"OK נבחר מצב חיפוש לפי קוד ({selector})")
-                    return True
-                # גם אם is_selected לא עובד, נמשיך אם לחצנו
-                print(f"OK לחצנו על רדיו חיפוש לפי קוד ({selector})")
-                return True
-            except Exception:
-                continue
-
-        print("ERROR לא הצלחתי לבחור מצב חיפוש לפי קוד")
-        return False
-
-    def _find_code_input(self):
-        """איתור שדה הזנת קוד המדד."""
-        selectors = [
-            "input[ng-model='mainCtrl.codesearch']",
-            "input[ng-model*='codesearch']",
-            "input[placeholder*='קוד']",
-        ]
-        for selector in selectors:
-            elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-            if elements:
-                return elements[0]
-        return None
-
-    def _enter_indicator_code(self, indicator_code):
-        """הזנת קוד מדד ולחיצה על המשך."""
-        from selenium.webdriver.common.action_chains import ActionChains
-
-        code_field = self.wait.until(lambda d: self._find_code_input())
-        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", code_field)
-        time.sleep(0.5)
-
-        code_field.click()
-        time.sleep(0.3)
-        code_field.clear()
-        time.sleep(0.3)
-
-        # הזנה מהירה ויציבה (פחות סיכוי לאיבוד פוקוס)
-        code_field.send_keys(indicator_code)
-        entered = (code_field.get_attribute("value") or "").strip()
-        if entered != indicator_code:
-            self.driver.execute_script(
-                "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input')); arguments[0].dispatchEvent(new Event('change'));",
-                code_field,
-                indicator_code,
-            )
-            entered = (code_field.get_attribute("value") or "").strip()
-
-        if entered != indicator_code:
-            print(f"ERROR הקוד לא הוזן. צפוי: {indicator_code}, בפועל: '{entered}'")
-            return False
-
-        print(f"OK קוד {indicator_code} הוזן בהצלחה")
-        time.sleep(1)
-
-        continue_selectors = [
-            (By.CSS_SELECTOR, 'a.greenBigBtn[data-ng-click="mainCtrl.searchByCode();"]'),
-            (By.XPATH, "//a[contains(@data-ng-click, 'searchByCode')]"),
-            (By.XPATH, "//a[contains(@class, 'greenBigBtn') and contains(., 'המשך')]"),
-        ]
-        for by, selector in continue_selectors:
-            try:
-                continue_btn = self.wait.until(EC.element_to_be_clickable((by, selector)))
-                continue_btn.click()
-                print("OK נלחץ על המשך אחרי הזנת קוד")
-                time.sleep(3)
-                return True
-            except Exception:
-                continue
-
-        print("ERROR לא נמצא כפתור המשך אחרי הזנת קוד")
-        return False
-
-    def _open_cbs_madadim_page(self):
-        """פתיחת דף מחולל המדדים ומעבר ל-iframe הנכון."""
-        if not self.driver:
-            print("ERROR אין דפדפן פעיל")
-            return False
-        self.driver.switch_to.default_content()
-        self.driver.get(self.cbs_url)
-        self.driver.set_window_size(1936, 1048)
-        time.sleep(4)
-        return self._switch_to_cbs_tool_frame()
-        
     def get_previous_month_number(self):
         """קבלת מספר החודש הקודם"""
-        today = datetime.today()
-        current_time = today.time()
+        _, prev_month = self.get_previous_period()
+        return prev_month
 
-        # חישוב החודש הקודם
-        if today.month == 1:
-            month = 12
-        else:
-            month = today.month - 1
+    def _format_cbs_value(self, value):
+        """המרת ערך המדד למחרוזת בלי עיגול נוסף"""
+        if value is None:
+            return None
+        if isinstance(value, float):
+            return format(value, '.10f').rstrip('0').rstrip('.')
+        return str(value)
 
-        if today.day <= 15 and current_time < dt_time(18, 30):
-            month -= 1
-            if month == 0:
-                month = 12  # במקרה שירדנו מדצמבר לינואר
-
-        return month
-
-        
-    
-    def scrape_cbs_indicator(self, indicator_name, indicator_code, scenario_text=None):
-        """שליפת מדד בודד מאתר הלמ"ס"""
+    def scrape_cbs_indicator(self, indicator_name, indicator_code):
+        """שליפת מדד בודד מ-API הלמ"ס"""
+        target_year, target_month = self.get_previous_period()
+        period = f"{target_month:02d}-{target_year}"
+        params = {
+            "id": indicator_code,
+            "format": "json",
+            "download": "false",
+            "startPeriod": period,
+            "endPeriod": period,
+        }
+        print(f"מתחיל לשלוף את המדד: {indicator_name} (קוד: {indicator_code}) לחודש {period}")
         try:
-            # בדיקה אם החלון עדיין פתוח
+            response = requests.get(
+                self.cbs_api_url,
+                params=params,
+                headers=self.cbs_api_headers,
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            print(f"ERROR שגיאה בקריאת API למדד {indicator_name}: {e}")
+            return None
+
+        month_blocks = data.get("month") or []
+        dates = []
+        for block in month_blocks:
+            dates.extend(block.get("date") or [])
+
+        matching = next(
+            (
+                item for item in dates
+                if item.get("year") == target_year and item.get("month") == target_month
+            ),
+            None,
+        )
+        if not matching:
+            print(f"ERROR לא נמצא ערך לחודש {period} במדד {indicator_name}")
+            return None
+
+        curr_base = matching.get("currBase") or {}
+        value = curr_base.get("value")
+        if value is None:
+            print(f"ERROR אין currBase.value למדד {indicator_name} בחודש {period}")
+            return None
+
+        formatted = self._format_cbs_value(value)
+        print(f"OK ערך המדד {indicator_name} לחודש {period}: '{formatted}'")
+        return formatted
+
+    def scrape_all_cbs_indicators(self):
+        """שליפת כל המדדים: למ\"ס דרך API, BLS דרך דפדפן"""
+        results = {}
+        bls_value = None
+
+        for indicator_name, indicator_code in self.cbs_indicators.items():
+            value = self.scrape_cbs_indicator(indicator_name, indicator_code)
+            if value:
+                results[indicator_name] = value
+
+        try:
+            print("\nמתחיל לשלוף נתוני BLS...")
+            if not self.setup_driver():
+                err = self._driver_error or "לא ניתן להפעיל את Chrome"
+                print(f"ERROR לא ניתן לשלוף BLS: {err}")
+            else:
+                bls_value = self.scrape_bls_cpi()
+                if bls_value:
+                    print(f"OK נתון BLS נשלף: {bls_value}")
+                else:
+                    print("ERROR לא הצליח לשלוף נתון BLS")
+        finally:
+            self.close_driver()
+
+        return results, bls_value
+
+
+    def scrape_bls_cpi(self):
+        """שליפת נתוני CPI מאתר BLS. נכשל ויוצא אחרי BLS_FETCH_TIMEOUT_SECONDS."""
+        timeout = getattr(config, "BLS_FETCH_TIMEOUT_SECONDS", 5)
+        started = time.monotonic()
+
+        def remaining():
+            return timeout - (time.monotonic() - started)
+
+        def timed_out():
+            if remaining() <= 0:
+                print(f"ERROR פג הזמן לשליפת מדד BLS ({timeout} שניות) — מדלגים וסוגרים")
+                return True
+            return False
+
+        try:
             try:
                 self.driver.current_url
             except Exception:
                 print("ERROR - החלון נסגר, יוצר חלון חדש...")
                 if not self.setup_driver():
                     return None
-            
-            if not self.driver:
-                return None
-            
-            print(f"מתחיל לשלוף את המדד: {indicator_name} (קוד: {indicator_code})")
-            
-            if not self._open_cbs_madadim_page():
-                return None
 
-            if not self._select_search_by_code_mode():
-                return None
+            print(f"מתחיל לשלוף נתוני CPI מאתר BLS (timeout {timeout} שניות)...")
+            self.driver.set_page_load_timeout(timeout)
+            self.driver.set_script_timeout(timeout)
 
-            print(f"מכניס קוד {indicator_code}...")
-            if not self._enter_indicator_code(indicator_code):
-                return None
-
-            
-            # שלב 4: בחירת הנושא-variableBox - גנרי
-            print("בוחר את הנושא השני...")
             try:
-                # מחפש את כל הנושאים ב-variableBox
-                print("מחפש את כל הנושאים...")
-                topics = self.wait.until(
-                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, '.variableBox .variableBoxInner ul li a'))
-                )
-                print(f"נמצאו {len(topics)} נושאים")
-                
-                # בדיקה שיש לפחות 2 נושאים
-                if len(topics) < 2:
-                    print("ERROR לא נמצאו מספיק נושאים")
-                    return None
-                
-                # בחירת הנושא השני (אינדקס 1)
-                second_topic = topics[1]
-                topic_text = second_topic.text
-                print(f"בוחר את הנושא השני: {topic_text}")
-                
-                try:
-                    second_topic.click()
-                    print("OK נבחר הנושא השני בלחיצה רגילה")
-                except:
-                    # אם נכשל, ננסה JavaScript
-                    self.driver.execute_script("arguments[0].click();", second_topic)
-                    print("OK נבחר הנושא השני עם JavaScript")
-                
-                time.sleep(3)
-            except Exception as e:
-                print(f"ERROR שגיאה בבחירת הנושא השני: {e}")
+                self.driver.get(self.bls_url)
+            except TimeoutException:
+                print(f"ERROR טעינת אתר BLS חרגה מ-{timeout} שניות")
                 return None
 
-            
-            # לחיצה על כפתור המשך לבחירת הנושאים
-            next_arrow = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, 'img[src*="nextArrow"]'))
-            )
-            next_arrow.click()
-            time.sleep(2)
-            
-            # שלב 5: בחירת תת-נושא המתאים למדד הנוכחי בלבד
-            print("בוחר תת נושא...")
-            try:
-                subtopics = self.wait.until(
-                    EC.presence_of_all_elements_located(
-                        (By.CSS_SELECTOR, 'div.jspPane ul.scroll-pane-inner li a.ellipsis.ng-binding')
-                    )
-                )
-                print(f"נמצאו {len(subtopics)} תת נושאים")
-
-                if not subtopics:
-                    print("ERROR לא נמצאו תת נושאים")
-                    return None
-
-                if scenario_text:
-                    target = next((t for t in subtopics if scenario_text in (t.text or "")), None)
-                    if target:
-                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target)
-                        time.sleep(0.5)
-                        try:
-                            target.click()
-                        except Exception:
-                            self.driver.execute_script("arguments[0].click();", target)
-                        print(f"OK נבחר תת נושא: {scenario_text}")
-                        time.sleep(1)
-                    else:
-                        print(f"ERROR לא נמצא תת נושא: {scenario_text}")
-                        return None
-                else:
-                    subtopics[0].click()
-                    print("OK נבחר תת נושא ראשון (ברירת מחדל)")
-                    time.sleep(1)
-
-            except Exception as e:
-                print(f"ERROR שגיאה בבחירת תת נושא: {e}")
+            if timed_out():
                 return None
 
-            
-            # שלב 6: בחירת הסדרה הראשונה (צ'ק בוקס) - גנרי
-            try:
-                # מחפש את כל ה-labels שמייצגים checkboxes
-                labels = self.driver.find_elements(By.CSS_SELECTOR, 'label[for^="series_"]')
-                
-                if not labels:
-                    print("ERROR לא נמצא צ'ק בוקס")
-                else:
-                    first_label = labels[0]
-                    # סימון הצ'קבוקס דרך JavaScript
-                    checkbox_id = first_label.get_attribute('for')
-                    script = f"document.getElementById('{checkbox_id}').click();"
-                    self.driver.execute_script(script)
-                    print(f"OK צ'ק בוקס {checkbox_id} סומן בהצלחה")
-
-            except Exception as e:
-                print(f"ERROR שגיאה בסימון צ'ק בוקס: {e}")
-
-            
-            # לחיצה על המשך לבחירת תקופת זמן
-            continue_time = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, 'a[data-ng-click="fltCtrl.continueNextStep();"]'))
-            )
-            continue_time.click()
-            time.sleep(2)
-            
-            # שלב 7: # שלב 7: בחירת השנה של החודש הקודם
-            print("בוחר שנה...")
-            try:
-                today = date.today()
-                prev_month_date = today.replace(day=1) - timedelta(days=1)  # היום האחרון של החודש הקודם
-                target_year = prev_month_date.year
-                print("target year:", target_year)
-                
-                # מציאת האלמנט של השנה
-                year_link = self.wait.until(
-                    EC.presence_of_element_located((
-                        By.CSS_SELECTOR,
-                        f"div.variableBoxInner.scroll-pane.jspScrollable div.jspPane ul li a[title='{target_year}']"
-                    ))
-)
-                
-                # גלילה לאלמנט כדי שיהיה גלוי
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", year_link)
-                time.sleep(0.5)
-                
-                # לחיצה על השנה
-                year_link.click()
-                print(f"OK נבחרה שנה {target_year}")
-                time.sleep(2)
-            except Exception as e:
-                print(f"ERROR שגיאה בבחירת שנה: {e}")
-                return None
-            
-            # שלב 8: בחירת החודש הקודם
-            prev_month = self.get_previous_month_number()
-            print(f"בוחר חודש {prev_month}...")
-            month_containers = self.wait.until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
-            )
-            month_link = month_containers[1].find_element(By.CSS_SELECTOR, f"ul li a[title='{prev_month}']")
-            
-            # גלילה לאלמנט כדי שיהיה גלוי
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", month_link)
-            time.sleep(0.5)
-            
-            month_link.click()
-            print(f"OK נבחר חודש {prev_month}")
-            time.sleep(1)
-            
-            # שלב 9: בחירת עד שנה
-            try:
-                price_index = self.wait.until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
-                )
-                price_link = price_index[2].find_element(By.CSS_SELECTOR, f"ul li a[title='{target_year}']")
-                print(f"price_link:  {price_link}")
-                price_link.click()
-                time.sleep(1)
-                
-            except Exception as e:
-                print(f"ERROR שגיאה בבחירת עד שנה: {e}")
-                return None
-
-            # שלב 10 :בחירת עד חודש
-            try:
-                prev_month = self.get_previous_month_number()
-                ad_month = self.wait.until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.variableBox.Narrow div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane'))
-                )
-                ad_month_link = ad_month[3].find_element(By.CSS_SELECTOR, f"ul li a[title='{prev_month}']")
-                ad_month_link.click()
-                time.sleep(1)
-                
-            except Exception as e:
-                print(f"ERROR שגיאה בבחירת עד חודש: {e}")
-                return None
-
-            # שלב 11 :בחירת סוג מדד
-            print("בוחר סוג מדד...")
-            try:
-                # מציאת העמודה "סוג מדד" לפי הכותרת
-                index_type_link = self.wait.until(
-                    EC.element_to_be_clickable((By.XPATH, '//p[@class="boxTitle ng-binding"][contains(text(), "סוג מדד")]/following-sibling::div//ul//li[1]/a'))
-                )
-                print(f"OK נמצא סוג מדד: {index_type_link.get_attribute('title')}")
-                index_type_link.click()
-                print("OK נבחר סוג מדד ראשון")
-                time.sleep(1)
-                
-            except Exception as e:
-                print(f"ERROR שגיאה בבחירת סוג מדד: {e}")
-                return None
-
-            # שלב 12 :בחירת סוג בסיס
-            print("בוחר סוג בסיס...")
-            try:
-                # מציאת העמודה "סוג בסיס" לפי הכותרת
-                index_type_link = self.wait.until(
-                    EC.element_to_be_clickable((By.XPATH, '//p[@class="boxTitle ng-binding"][contains(text(), "סוג בסיס")]/following-sibling::div//ul//li[1]/a'))
-                )
-                print(f"OK נמצא סוג בסיס: {index_type_link.get_attribute('title')}")
-                index_type_link.click()
-                print("OK נבחר סוג בסיס ראשון")
-                time.sleep(1)
-                
-            except Exception as e:
-                print(f"ERROR שגיאה בבחירת סוג בסיס: {e}")
-                return None
-
-            # שלב 13 :בחירת תקופת בסיס
-            print("בוחר תקופת בסיס...")
-            try:
-                # ניסיון ראשון (הישן)
-                try:
-                    # מציאת כל האפשרויות של תקופת בסיס (הגרסה הגנרית)
-                    period_options = self.wait.until(
-                        EC.presence_of_all_elements_located((
-                            By.CSS_SELECTOR,
-                            'div.variableBoxInner.scroll-pane.jspScrollable div.jspContainer div.jspPane a.ellipsis.ng-binding'
-                        ))
-                    )
-                    first_period = period_options[0]
-                    print(f"OK נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
-                    first_period.click()
-                    print("OK נבחרה תקופת בסיס ראשונה (ניסיון ראשון)")
-                    time.sleep(1)
-
-                except Exception as e:
-                    print(f"INFO ניסיון ראשון נכשל ({e}), מנסה גרסה חלופית...")
-
-                    # ניסיון שני (החדש עם control-id)
-                    try:
-                        period_options = self.wait.until(
-                            EC.presence_of_all_elements_located((
-                                By.CSS_SELECTOR,
-                                "li[control-id=\"'basePeriods'\"] div.variableBoxInner.scroll-pane ul.scroll-pane-inner a.ellipsis.ng-binding"
-                            ))
-                        )
-                        first_period = period_options[0]
-                        print(f"OK נמצאה תקופת בסיס: {first_period.get_attribute('title')}")
-                        first_period.click()
-                        print("OK נבחרה תקופת בסיס ראשונה (ניסיון שני)")
-                        time.sleep(1)
-
-                    except Exception as e2:
-                        print(f"ERROR שני הניסיונות לבחירת תקופת בסיס נכשלו: {e2}")
-                        return None
-
-            except Exception as outer_e:
-                print(f"שגיאה כללית בתהליך בחירת תקופת בסיס: {outer_e}")
-                return None
-
-
-
-            # שלב 12: המשך לטבלת נתונים
-            print("עובר לטבלת נתונים...")
-            try:
-                continue_table_btn = self.wait.until(
-                    EC.element_to_be_clickable((By.LINK_TEXT, "המשך לטבלת הנתונים"))
-                )
-                continue_table_btn.click()
-                print("OK עבר לטבלת נתונים")
-                time.sleep(5)  # המתנה לטעינת הטבלה
-            except Exception as e:
-                print(f"ERROR שגיאה במעבר לטבלה: {e}")
-                return None
-
-            # שלב 13: חילוץ הערך מהטבלה
-            print(f"מחלץ ערך מהטבלה לחודש {prev_month}...")
-            try:
-                # חיפוש הטבלה
-                table = self.wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, 'div#grid'))
-                )
-                print(f"OK נמצאה טבלה")
-                
-                # מציאת ה-tr עם data-uid (השורה עם הערכים)
-                data_row = table.find_element(By.CSS_SELECTOR, 'tr[data-uid]')
-                print(f"OK נמצאה שורת נתונים")
-                
-                # מציאת ה-td המתאים לפי מספר החודש
-                # 3 ה-td הראשונים הם כותרות, אז צריך להוסיף 3
-                # חודש 1 = td 4, חודש 8 = td 11 וכן הלאה
-                td_index = prev_month + 3
-                value_cell = data_row.find_element(By.CSS_SELECTOR, f'td:nth-child({td_index})')
-                print(f"OK נמצא td במיקום {td_index} (חודש {prev_month})")
-                                
-                # גלילה לתא כדי שיהיה גלוי - חשוב לעשות זאת לפני קריאת הערך!
-                print(f"גולל לתא...")
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'nearest', inline: 'center'});", value_cell)
-                time.sleep(2)
-                print(f"OK גלילה הושלמה")
-                
-                # עכשיו קוראים את הערך אחרי הגלילה
-                indicator_value = value_cell.text.strip()
-                print(f"OK ערך המדד לחודש {prev_month}: '{indicator_value}'")
-                
-                if not indicator_value:
-                    print("WARNING הערך ריק, מנסה עם JavaScript...")
-                    indicator_value = self.driver.execute_script("return arguments[0].innerText || arguments[0].textContent;", value_cell).strip()
-                    print(f"OK ערך מ-JavaScript: '{indicator_value}'")
-                
-                return indicator_value
-                
-            except Exception as e:
-                print(f"ERROR שגיאה בחילוץ ערך מהטבלה: {e}")
-                import traceback
-                traceback.print_exc()
-                return None
-                
-            
-        except Exception as e:
-            print(f"שגיאה בשליפת המדד {indicator_name}: {str(e)}")
-            return None
-    
-    def scrape_all_cbs_indicators(self):
-        """שליפת כל המדדים מאתר הלמ"ס"""
-        if not self.setup_driver():
-            err = self._driver_error or "לא ניתן להפעיל את Chrome"
-            raise RuntimeError(
-                f"לא ניתן להפעיל את דפדפן Chrome: {err}\n"
-                "ודאי ש-Chrome מותקן וש-Selenium מעודכן."
-            )
-        
-        results = {}
-        bls_value = None
-        
-        try:
-            indicators = list(self.cbs_indicators.items())
-            for i, (indicator_name, indicator_code) in enumerate(indicators):
-                scenario_text = self.cbs_scenarios[i] if i < len(self.cbs_scenarios) else None
-                value = self.scrape_cbs_indicator(indicator_name, indicator_code, scenario_text)
-                if value:
-                    results[indicator_name] = value
-                    
-                # הפסקה קצרה בין מדדים
-                time.sleep(2)
-            
-            # שליפת נתוני BLS
-            print("\nמתחיל לשלוף נתוני BLS...")
-            bls_value = self.scrape_bls_cpi()
-            if bls_value:
-                print(f"OK נתון BLS נשלף: {bls_value}")
-            else:
-                print("ERROR לא הצליח לשלוף נתון BLS")
-                
-        finally:
-            self.close_driver()
-        
-        return results, bls_value
-    
-    def scrape_bls_cpi(self):
-        """שליפת נתוני CPI מאתר BLS"""
-        try:
-            # בדיקה אם החלון עדיין פתוח
-            try:
-                self.driver.current_url
-            except:
-                print(f"ERROR - החלון נסגר, יוצר חלון חדש...")
-                self.setup_driver()
-            
-            print("מתחיל לשלוף נתוני CPI מאתר BLS...")
-            
-            # פתיחת האתר
-            self.driver.get(self.bls_url)
-            time.sleep(5)  # המתנה ארוכה יותר לטעינת JavaScript
-            
-            # המתנה לטעינת הטבלה - ננסה כמה אפשרויות
             print("מחכה לטעינת הטבלה...")
+            wait = WebDriverWait(self.driver, max(0.1, remaining()))
             try:
-                # נסיון 1: המתנה לטבלה רגילה
-                self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.dataTable")))
-                print("OK נמצאה טבלת dataTable")
-            except:
-                try:
-                    # נסיון 2: המתנה לטבלה עם id
-                    self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table[id*='DataTables']")))
-                    print("OK נמצאה טבלת DataTables")
-                except:
-                    # נסיון 3: המתנה לכל טבלה
-                    self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
-                    print("OK נמצאה טבלה כלשהי")
-            
-            # חיפוש הטבלה עם הנתונים - ננסה כמה אפשרויות
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.dataTable, table[id*='DataTables'], table")))
+            except TimeoutException:
+                print(f"ERROR הטבלה ב-BLS לא נטענה תוך {timeout} שניות")
+                return None
+
+            if timed_out():
+                return None
+
             table = None
-            try:
-                # נסיון 1: טבלה עם class='dataTables_scrollBody'
-                table = self.driver.find_element(By.CSS_SELECTOR, ".dataTables_scrollBody")
-                print("OK נמצאה טבלת dataTables_scrollBody")
-            except:
-                try:
-                    # נסיון 2: טבלה עם class='dataTable'
-                    table = self.driver.find_element(By.CSS_SELECTOR, ".dataTable")
-                    print("OK נמצאה טבלת dataTable")
-                except:
-                    try:
-                        # נסיון 3: כל טבלה
-                        tables = self.driver.find_elements(By.TAG_NAME, "table")
-                        if tables:
-                            table = tables[0]  # ניקח את הטבלה הראשונה
-                            print(f"OK נמצאה טבלה ראשונה מתוך {len(tables)} טבלאות")
-                    except:
-                        print("ERROR לא נמצאה טבלה")
-                        return None
-            
+            for selector in (".dataTables_scrollBody", ".dataTable"):
+                found = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                if found:
+                    table = found[0]
+                    print(f"OK נמצאה טבלה ({selector})")
+                    break
+            if table is None:
+                tables = self.driver.find_elements(By.TAG_NAME, "table")
+                if tables:
+                    table = tables[0]
+                    print(f"OK נמצאה טבלה ראשונה מתוך {len(tables)} טבלאות")
+
             if not table:
                 print("ERROR לא נמצאה טבלה מתאימה")
                 return None
-            
-            # קבלת החודש הקודם בפורמט הנכון
-            today = datetime.today()
-            current_time = today.time()
-            
-            # חישוב החודש והשנה הקודמים (זהה ללוגיקה של get_previous_month_filename)
-            if today.month == 1:
-                prev_month = 12
-                prev_year = today.year - 1
-            else:
-                prev_month = today.month - 1
-                prev_year = today.year
-            
-            # אם היום <= 15 והשעה לפני 18:30, נחזור עוד חודש אחורה
-            if today.day <= 15 and current_time < dt_time(18, 30):
-                prev_month -= 1
-                if prev_month == 0:
-                    prev_month = 12
-                    prev_year -= 1
-            
-            # יצירת period בפורמט MXX
+
+            prev_year, prev_month = self.get_previous_period()
             period = f"M{prev_month:02d}"
             print(f"מחפש נתונים לחודש: {period}, שנה: {prev_year}")
-            
-            # המתנה נוספת לטעינת הנתונים
-            time.sleep(3)
-            
-            # חיפוש השורות - ננסה כמה דרכים
-            rows = []
+
+            if timed_out():
+                return None
+
             try:
-                # נסיון 1: חיפוש בתוך הטבלה
                 rows = table.find_elements(By.TAG_NAME, "tr")
                 print(f"נמצאו {len(rows)} שורות בטבלה")
-            except:
-                # נסיון 2: חיפוש בכל הדף
+            except Exception:
                 rows = self.driver.find_elements(By.CSS_SELECTOR, "table tr")
                 print(f"נמצאו {len(rows)} שורות בדף")
-            
+
             if not rows:
                 print("ERROR לא נמצאו שורות בטבלה")
                 return None
-            
-            # חיפוש השורה עם השנה והחודש הנכונים
+
             target_value = None
             print("מחפש שורה עם הנתונים הנכונים...")
-            
+
             for i, row in enumerate(rows):
+                if timed_out():
+                    return None
                 try:
                     cells = row.find_elements(By.TAG_NAME, "td")
-                    if len(cells) >= 4:  # צריך לפחות 4 עמודות
+                    if len(cells) >= 4:
                         year_cell = cells[0].text.strip()
                         period_cell = cells[1].text.strip()
                         label_cell = cells[2].text.strip()
                         value_cell = cells[3].text.strip()
-                        
                         print(f"שורה {i}: שנה={year_cell}, period={period_cell}, label={label_cell}, value={value_cell}")
-                        
-                    # בדיקה אם זה השורה הנכונה
-                    if year_cell == str(prev_year) and period_cell == period:
-                        target_value = value_cell
-                        print(f"OK נמצא נתון לחודש {period}/{prev_year}: {target_value}")
-                        
-                        # שמירה על הערך המדויק ללא עיגול
-                        print(f"OK ערך BLS מקורי: '{target_value}'")
-                        
-                        break
+                        if year_cell == str(prev_year) and period_cell == period:
+                            target_value = value_cell
+                            print(f"OK נמצא נתון לחודש {period}/{prev_year}: {target_value}")
+                            print(f"OK ערך BLS מקורי: '{target_value}'")
+                            break
                 except Exception as e:
                     print(f"שגיאה בעיבוד שורה {i}: {e}")
                     continue
-            
+
             if target_value:
                 print(f"OK נתון CPI נשלף בהצלחה: {target_value}")
                 return target_value
-            else:
-                print(f"ERROR לא נמצא נתון לחודש {period}/{prev_year}")
-                print("נסיון חיפוש חלופי...")
-                
-                # נסיון חלופי - חיפוש לפי טקסט
-                try:
-                    # חיפוש אלמנט שמכיל את התאריך
-                    date_element = self.driver.find_element(By.XPATH, f"//td[contains(text(), '{prev_year}') and following-sibling::td[contains(text(), '{period}')]]")
-                    value_element = date_element.find_element(By.XPATH, "./following-sibling::td[2]")
-                    target_value = value_element.text.strip()
-                    print(f"OK נמצא נתון בחיפוש חלופי: {target_value}")
-                    
-                    # שמירה על הערך המדויק ללא עיגול
-                    print(f"OK ערך BLS חלופי מקורי: '{target_value}'")
-                    
-                    return target_value
-                except:
-                    print("ERROR גם החיפוש החלופי נכשל")
-                    return None
-                
+
+            if timed_out():
+                return None
+
+            print(f"ERROR לא נמצא נתון לחודש {period}/{prev_year}")
+            print("נסיון חיפוש חלופי...")
+            try:
+                date_element = self.driver.find_element(
+                    By.XPATH,
+                    f"//td[contains(text(), '{prev_year}') and following-sibling::td[contains(text(), '{period}')]]",
+                )
+                value_element = date_element.find_element(By.XPATH, "./following-sibling::td[2]")
+                target_value = value_element.text.strip()
+                print(f"OK נמצא נתון בחיפוש חלופי: {target_value}")
+                print(f"OK ערך BLS חלופי מקורי: '{target_value}'")
+                return target_value
+            except Exception:
+                print("ERROR גם החיפוש החלופי נכשל")
+                return None
+
+        except TimeoutException:
+            print(f"ERROR פג הזמן לשליפת מדד BLS ({timeout} שניות) — מדלגים וסוגרים")
+            return None
         except Exception as e:
             print(f"ERROR שגיאה בשליפת נתוני BLS: {e}")
             import traceback
