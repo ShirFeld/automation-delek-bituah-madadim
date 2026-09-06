@@ -696,7 +696,7 @@ class MainApplication:
 
         self._madadim_status_label = tk.Label(
             self.results_frame,
-            text="מתחיל שליפת כל המדדים... (יפתח Chrome)",
+            text="מתחיל שליפת כל המדדים...",
             font=self.fonts['text'],
             bg='#f0f0f0',
             fg=self.colors['text']
@@ -714,7 +714,7 @@ class MainApplication:
                 def update_status(msg):
                     self.root.after(0, lambda: self._madadim_status_label.config(text=msg))
 
-                update_status("שולף מדדים מאתר הלמ\"ס... (זה עשוי לקחת כ-10 דקות)")
+                update_status("שולף מדדים מ-API הלמ\"ס, ואחר כך מדד BLS (Chrome)...")
                 cbs_results, bls_value = scraper.scrape_all_cbs_indicators()
 
                 def show_results():
@@ -745,7 +745,7 @@ class MainApplication:
                     else:
                         tk.Label(
                             self.results_frame,
-                            text="לא הצלחנו לשלוף מדדים. בדקי ש-Chrome מותקן ונסי שוב.",
+                            text="לא הצלחנו לשלוף מדדים. בדקי חיבור לאינטרנט (ול-Chrome עבור מדד BLS) ונסי שוב.",
                             font=self.fonts['text'],
                             bg='#f0f0f0',
                             fg='red',
