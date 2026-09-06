@@ -26,6 +26,18 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 
+
+def _format_par_dlk_first_price(value):
+    """
+    הערך הראשון אחרי התאריך ב-par_dlk (עמודה 6 מימין):
+    3 ספרות -> ' XXX' (רווח אחרי הסימון), 4 ספרות -> 'XXXX' (צמוד לסימון).
+    """
+    n = int(value)
+    if n >= 1000:
+        return f"{n:4d}"
+    return f" {n:3d}"
+
+
 class ModernFuelScraper:
     def __init__(self):
         self.root = tk.Tk()
@@ -993,10 +1005,10 @@ class ModernFuelScraper:
             # נחלק את השורה לחלקים לפי התווים המפרידים
             parts = new_line.split(new_line[8])  # מפריד לפי התו בעמדה 8
             
-            # parts[0] = תאריך (כבר עדכנו)
+            # parts[0] = תאריך
             # parts[1] = רווחים
-            # parts[2] = רווחים
-            # parts[3] = בנזין 98
+            # parts[2] = רווחים / שדה ריק
+            # parts[3] = בנזין 98 (ערך ראשון אחרי התאריך – עמודה 6 מימין)
             # parts[4] = בנזין 95
             # parts[5] = סולר
             # parts[6] = נפט
@@ -1004,9 +1016,9 @@ class ModernFuelScraper:
             # parts[8] = 000
             
             if len(parts) >= 9:
-                # בנזין 98 - 3 ספרות עם רווח לפני
+                # בנזין 98 – 3 ספרות עם רווח, 4 ספרות צמוד לסימון
                 if benzin98:
-                    parts[3] = f" {benzin98:3d}"
+                    parts[3] = _format_par_dlk_first_price(benzin98)
                 
                 # בנזין 95 - 3 ספרות עם רווח לפני
                 if benzin95:

@@ -72,8 +72,11 @@ CBS_URL = "https://www.cbs.gov.il/he/Statistics/Pages/%D7%9E%D7%97%D7%95%D7%9C%D
 # אתר BLS (מדד אמריקאי)
 BLS_URL = "https://data.bls.gov/dataViewer/view/timeseries/CUUR0000SA0"
 
-# אתר משרד התחבורה (ביטוח רכב)
-MINISTRY_OF_TRANSPORT_URL = "https://car.cma.gov.il/Parameters/Get?next_page=2&curr_page=1&playAnimation=true&fontSize=12"
+# אתר משרד התחבורה / רשות שוק ההון (ביטוח רכב)
+CMA_CAR_BASE_URL = "https://car.cma.gov.il"
+MINISTRY_OF_TRANSPORT_URL = f"{CMA_CAR_BASE_URL}/Parameters/Get?next_page=2&curr_page=1&playAnimation=true&fontSize=12"
+CMA_CALCULATE_URL = f"{CMA_CAR_BASE_URL}/Parameters/Calculate"
+CMA_SHEET_PARAMS_URL = f"{CMA_CAR_BASE_URL}/Parameters/GetParametersPerSheet"
 
 # אתר פז (דלק)
 PAZ_URL = "https://www.paz.co.il/price-lists"

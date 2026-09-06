@@ -469,9 +469,9 @@ class MainApplication:
         • כל קבוצות הגיל: 17-20, 21-23, 24-39, 40-49, 50+
         • 2 משקלים לכל קבוצה: עד 4000 ק"ג, מעל 4000 ק"ג
         
-        🚀 שליפה מלאה (34 תרחישים):
-        • כל התרחישים ברצף - דפדפן יציב אחד
-        • פרטי + מסחרי יחד בתהליך אחד
+        🚀 שליפה מלאה (37 תרחישים):
+        • כל התרחישים בבקשות API
+        • דפדפן נפתח פעם אחת לאימות, ואז פרטי + מסחרי + מיוחד
         
         📊 מקור הנתונים: חברת הראל ביטוח"""
         
@@ -596,7 +596,7 @@ class MainApplication:
                             msg = (
                                 f"לא נשלפו נתונים ({results.get('scraped_count', 0)}/37).\n"
                                 f"לא נוצר KNE ולא עודכן par_rech.\n\n"
-                                f"בדקי ש-Chrome פועל ונסי שוב."
+                                f"בדקי חיבור לאינטרנט ונסי שוב."
                             )
                             messagebox.showwarning("אין נתונים", msg)
                         elif results.get('total_success', 0) > 0:
@@ -619,7 +619,7 @@ class MainApplication:
                                 msg += f"\n\n⚠️ par_rech.dat לא עודכן - בדקי את הלוג"
                             messagebox.showinfo("הושלם", msg)
                         else:
-                            messagebox.showerror("שגיאה", "לא ניתן להגדיר דפדפן או לא נמצאו נתונים")
+                            messagebox.showerror("שגיאה", "לא ניתן להתחבר לאתר הביטוח או לא נמצאו נתונים")
 
                     self.root.after(0, finish_ui)
             
