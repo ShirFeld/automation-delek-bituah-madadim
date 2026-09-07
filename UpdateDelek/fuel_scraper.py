@@ -38,6 +38,20 @@ def _format_par_dlk_first_price(value):
     return f" {n:3d}"
 
 
+def _effective_date_from_fuel_data(fuel_data):
+    """
+    מפרסר את תאריך «תקף מ» מנתוני פז (dd/mm/yyyy).
+    אם הפרסור נכשל — מחזיר את התאריך של היום.
+    """
+    if fuel_data:
+        date_text = (fuel_data[0].get('date') or '').strip()
+        try:
+            return datetime.strptime(date_text, '%d/%m/%Y')
+        except (ValueError, TypeError):
+            pass
+    return datetime.now()
+
+
 class ModernFuelScraper:
     def __init__(self):
         self.root = tk.Tk()
@@ -608,11 +622,9 @@ class ModernFuelScraper:
             if not fuel_data:
                 return
                 
-            # קבלת התאריך - תמיד ראשון לחודש הנוכחי
-            current_date = datetime.now()
-            date_from_data = f"01/{current_date.strftime('%m/%Y')}"  # תמיד 01
-            # המרת התאריך לפורמט שם קובץ עם מקפים (dd-mm-yy)
-            date_for_filename = f"01-{current_date.strftime('%m-%y')}"  # תמיד 01 עם מקפים
+            effective = _effective_date_from_fuel_data(fuel_data)
+            date_from_data = effective.strftime('%d/%m/%Y')
+            date_for_filename = effective.strftime('%d-%m-%y')
             
             # יצירת הנתיב המלא מקובץ הקונפיג
             base_path = config.DELEK_OUTPUT_PATH
@@ -665,12 +677,9 @@ class ModernFuelScraper:
             # נתיב ושם קובץ בסיס הנתונים מקובץ הקונפיג
             base_path = config.DELEK_OUTPUT_PATH
             
-            # קבלת התאריך - תמיד ראשון לחודש הנוכחי
-            current_date = datetime.now()
-            month_year = current_date.strftime('%m%y')  # mmyy
-            date_for_db = f"01/{current_date.strftime('%m/%Y')}"  # 01/mm/yyyy
-            
-            db_filename = f"kne{month_year}.mdb"
+            effective = _effective_date_from_fuel_data(fuel_data)
+            date_for_db = effective.strftime('%d/%m/%Y')
+            db_filename = f"kne{effective.strftime('%d%m%y')}.mdb"
             db_file = os.path.join(base_path, db_filename)
             
             # מחיקת קובץ MDB קיים אם יש
@@ -957,9 +966,8 @@ class ModernFuelScraper:
             last_line = lines[-1].rstrip('\n\r')
             print(f"📄 שורה אחרונה בקובץ: {last_line[:50]}...")
             
-            # קבלת התאריך החדש - תמיד ראשון לחודש הנוכחי
-            current_date = datetime.now()
-            new_date = f"{current_date.strftime('%y')}/{current_date.strftime('%m')}/01"  # yy/mm/01
+            effective = _effective_date_from_fuel_data(fuel_data)
+            new_date = effective.strftime('%y/%m/%d')  # yy/mm/dd לפי «תקף מ»
             
             # המרת מחירים לפורמט הקובץ (הסרת נקודה עשרונית, כפל ב-100)
             benzin98 = None
@@ -1040,15 +1048,23 @@ class ModernFuelScraper:
                 sep = last_line[8]
                 new_line = sep.join(parts)
             
-            print(f"\n📝 שורה חדשה שתתווסף:")
-            print(f"   {new_line}")
-            
-            # וידוא שהשורה האחרונה מסתיימת ב-newline
-            if lines and not lines[-1].endswith('\n'):
-                lines[-1] = lines[-1] + '\n'
-            
-            # הוספת השורה החדשה כשורה נפרדת
-            lines.append(new_line + '\n')
+            existing_index = None
+            for i, line in enumerate(lines):
+                if line.rstrip('\n\r')[:8] == new_date:
+                    existing_index = i
+                    break
+
+            if existing_index is not None:
+                print(f"\n📝 מעדכן שורה קיימת עם התאריך {new_date}:")
+                print(f"   {new_line}")
+                ending = '\n' if lines[existing_index].endswith('\n') else ''
+                lines[existing_index] = new_line + ending
+            else:
+                print(f"\n📝 שורה חדשה שתתווסף:")
+                print(f"   {new_line}")
+                if lines and not lines[-1].endswith('\n'):
+                    lines[-1] = lines[-1] + '\n'
+                lines.append(new_line + '\n')
             
             # כתיבת הקובץ המעודכן לתיקייה היעד
             print("\n💾 כותב קובץ מעודכן לתיקייה המקומית...")
