@@ -27,7 +27,7 @@ Or run from the project folder:
 - `הפעל_תוכנה.bat` — uses the local venv
 - `run_main.bat` — uses Python on PATH
 
-Build an EXE with `07092026.spec` (PyInstaller).
+Build an EXE with `Auto070926V2.spec` (PyInstaller).
 
 ## Output
 
