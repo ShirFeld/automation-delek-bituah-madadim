@@ -1,88 +1,42 @@
-# שליפת מחירי דלק מאתר פז 🚗⛽
+# Fuel, Mandatory Insurance, and Indices Update
 
-תוכנה מודרנית לשליפת מחירי דלק מאתר פז עם ממשק משתמש מודרני בסגנון Windows 11.
+A Tkinter desktop app that scrapes prices and writes parameter files for KolNatun.
 
-## תכונות ✨
+Three tabs:
 
-- 🎨 ממשק משתמש מודרני ונקי בסגנון Windows 11
-- 📊 שליפת נתונים אוטומטית מאתר פז
-- 💾 שמירה אוטומטית בפורמט JSON
-- 🔍 חילוץ מדויק של המוצרים הנדרשים:
-  - בנ"ע 95
-  - בנ"ע סופר 98  
-  - נפט
-  - סולר-תחבורה
+- **Fuel prices** — Paz and delekulator
+- **Mandatory car insurance** — Capital Market Authority (CMA)
+- **Indices** — CBS API and US BLS CPI
 
-## דרישות מערכת 📋
+## Requirements
 
-- Python 3.7 ומעלה
-- חיבור לאינטרנט
+- Python 3.7 or later
+- Windows (Access files are created via COM)
+- Internet connection
+- Chrome (for Selenium-based scrapes)
 
-## התקנה והפעלה 🚀
+## Install and run
 
-### דרך 1: הפעלה מהירה
-1. הפעל את הקובץ `run.bat`
-2. המערכת תתקין את החבילות הנדרשות ותפעיל את התוכנה
-
-### דרך 2: התקנה ידנית
-1. התקן את החבילות הנדרשות:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. הפעל את התוכנה:
-   ```bash
-   python fuel_scraper.py
-   ```
-
-## איך זה עובד? 🔧
-
-1. התוכנה מתחברת לאתר פז
-2. מחפשת את טבלת "דלקים בתחנות"
-3. מחלצת את המחירים של המוצרים הנדרשים
-4. שומרת את הנתונים בקובץ JSON בתיקייה לפי תאריך
-5. מציגה את התוצאות בממשק המשתמש
-
-## מבנה הקובץ הנוצר 📁
-
-```json
-[
-  {
-    "fuel_type": "בנ\"ע 95",
-    "price": 7.31,
-    "date": "01/08/2025"
-  },
-  {
-    "fuel_type": "בנ\"ע סופר 98", 
-    "price": 9.44,
-    "date": "01/08/2025"
-  }
-]
-```
-
-## פתרון בעיות 🔨
-
-### התוכנה לא מתחילה
-- ודא ש-Python מותקן במערכת
-- בדוק חיבור לאינטרנט
-
-### לא נמצאו נתונים באתר
-- התוכנה תציג נתונים לדוגמה
-- בדוק שאתר פז זמין
-- ייתכן שמבנה האתר השתנה
-
-### שגיאת התקנת חבילות
 ```bash
-pip install --upgrade pip
 pip install -r requirements.txt
+python main_app.py
 ```
 
-## תכונות מתקדמות 🔥
+Or run from the project folder:
 
-- **עיצוב מודרני**: ממשק בסגנון Windows 11 עם צבעים ופונטים מותאמים
-- **תמיכה בעברית**: התוכנה תומכת במלא בטקסט עברי
-- **טיפול בשגיאות**: הודעות שגיאה ברורות ונתונים לדוגמה
-- **רישום פעולות**: מעקב מלא אחר תהליך השליפה
-- **שמירה חכמה**: קבצים נשמרים בתיקיות לפי תאריך
-*
+- `הפעל_תוכנה.bat` — uses the local venv
+- `run_main.bat` — uses Python on PATH
 
+Build an EXE with `07092026.spec` (PyInstaller).
+
+## Output
+
+Files are written under `C:\Users\shir.feldman\Desktop\parametrsUpdate` (set in `config.py`):
+
+| Area | Folder | Files |
+|------|--------|--------|
+| Fuel | `DELEK` | text, MDB, updates `par_dlk.dat` |
+| Mandatory insurance | `BituahRechev` | image, MDB, updates `par_rech.dat` |
+| Indices | `Madadim` | `madadimMMYY.txt` |
+
+`par_dlk.dat` and `par_rech.dat` are read from `p:\kolnatun\updates\paramPro` and written to the local output folder.
