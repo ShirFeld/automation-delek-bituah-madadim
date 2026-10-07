@@ -13,6 +13,7 @@ from tkinter import ttk, messagebox
 import threading
 from datetime import datetime
 import os
+import requests
 import config
 try:
     import win32com.client
@@ -23,8 +24,28 @@ except ImportError:
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+
+PAZ_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "he-IL,he;q=0.9,en-US;q=0.8,en;q=0.7",
+}
+
+
+def _fetch_paz_html_http():
+    """שליפת מחירון פז ב-HTTP. Selenium headless נחסם ב-Radware CAPTCHA."""
+    print("שולף מחירון פז ב-HTTP...")
+    response = requests.get(config.PAZ_URL, timeout=20, headers=PAZ_HEADERS)
+    response.raise_for_status()
+    return response.text
 
 
 def _format_par_dlk_first_price(value):
@@ -260,7 +281,7 @@ class ModernFuelScraper:
         """הגדרת דפדפן Selenium"""
         try:
             chrome_options = Options()
-            chrome_options.add_argument('--headless')  # דפדפן בלתי נראה
+            chrome_options.add_argument('--headless=new')
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
@@ -268,9 +289,10 @@ class ModernFuelScraper:
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
-            
-            # User agent אמיתי
-            chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+            chrome_options.add_argument(
+                'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
+            )
             
             service = Service(ChromeDriverManager().install())
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -355,39 +377,51 @@ class ModernFuelScraper:
         threading.Thread(target=self.scrape_fuel_prices, daemon=True).start()
         
     def scrape_fuel_prices(self):
-        """שליפת מחירי דלק מאתר פז באמצעות Selenium"""
+        """שליפת מחירי דלק מאתר פז (HTTP, ואם נכשל — Selenium)"""
         try:
-            self.update_status("מכין דפדפן...")
-            
-            # הגדרת דפדפן
-            if not self.setup_driver():
-                raise Exception("לא הצלחתי להגדיר דפדפן")
-            
+            fuel_data = []
             self.update_status("מתחבר לאתר פז...")
-            
-            # גלישה לאתר - משתמש בURL מקובץ הקונפיג
-            url = config.PAZ_URL
-            self.driver.get(url)
-            
-            # המתנה לטעינת העמוד
-            print("ממתין לטעינת העמוד...")
-            time.sleep(5)  # המתנה לטעינה מלאה
-            
-            # בדיקה אם יש CAPTCHA
-            page_source = self.driver.page_source
-            if "Radware" in page_source or "captcha" in page_source.lower():
-                print("זוהה CAPTCHA - ממתין עוד קצת...")
-                time.sleep(10)  # המתנה נוספת
-                page_source = self.driver.page_source
-            
-            self.update_status("מנתח נתונים...")
-            
-            # ניתוח HTML
-            soup = BeautifulSoup(page_source, 'html.parser')
-            
-            # חיפוש טבלת "דלקים בתחנות"
-            fuel_data = self.extract_fuel_data(soup)
-            
+
+            try:
+                soup = BeautifulSoup(_fetch_paz_html_http(), 'html.parser')
+                self.update_status("מנתח נתונים...")
+                fuel_data = self.extract_fuel_data(soup)
+            except Exception as e:
+                print(f"שליפת HTTP נכשלה: {e}")
+
+            if not fuel_data:
+                print("HTTP לא החזיר טבלת דלקים — עובר ל-Selenium...")
+                self.update_status("מכין דפדפן...")
+                if not self.setup_driver():
+                    raise Exception("לא הצלחתי להגדיר דפדפן")
+
+                self.update_status("מתחבר לאתר פז...")
+                self.driver.get(config.PAZ_URL)
+                print("ממתין לטעינת העמוד...")
+                try:
+                    WebDriverWait(self.driver, 25).until(
+                        EC.presence_of_element_located(
+                            (By.XPATH, "//*[contains(text(), 'דלקים בתחנות')]")
+                        )
+                    )
+                except Exception:
+                    page_source = self.driver.page_source
+                    if "Radware" in page_source or "captcha" in page_source.lower():
+                        print("זוהה CAPTCHA - ממתין לטעינת הטבלה...")
+                        try:
+                            WebDriverWait(self.driver, 20).until(
+                                EC.presence_of_element_located(
+                                    (By.XPATH, "//*[contains(text(), 'דלקים בתחנות')]")
+                                )
+                            )
+                        except Exception:
+                            print("CAPTCHA לא התפנה — אין טבלת דלקים")
+                    else:
+                        time.sleep(5)
+
+                self.update_status("מנתח נתונים...")
+                fuel_data = self.extract_fuel_data(BeautifulSoup(self.driver.page_source, 'html.parser'))
+
             print(f"נתונים שנחלצו: {len(fuel_data) if fuel_data else 0}")
             if fuel_data and len(fuel_data) > 0:
                 print("נמצאו נתונים אמיתיים מהאתר - משתמש בהם")
@@ -418,7 +452,7 @@ class ModernFuelScraper:
                 print("לא נמצאו נתונים אמיתיים ")
                 self.update_status("לא נמצאו נתונים אמיתיים")
                 try:
-                    messagebox.showwarning("אזהרה", "לא נמצאו נתונים באתר.\nהוצגו נתונים לדוגמה.\nנשמרו קבצים: טקסט ובסיס נתונים")
+                    messagebox.showwarning("אזהרה", "לא נמצאו נתונים באתר פז.\nלא נשמרו קבצים.")
                 except:
                     print("אזהרה: לא נמצאו נתונים באתר")
                 
