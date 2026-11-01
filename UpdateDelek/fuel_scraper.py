@@ -40,6 +40,18 @@ PAZ_HEADERS = {
 }
 
 
+MIGDAL_API_HEADERS = {
+    "User-Agent": PAZ_HEADERS["User-Agent"],
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "he,en-US;q=0.9,en;q=0.8",
+    "Origin": "https://migdal-webpages.energy-apps.org",
+    "Referer": "https://migdal-webpages.energy-apps.org/",
+}
+
+# ComponentTypeId ב-API של מגדל: 10 = בנזין 95 בשירות עצמי (11 = שירות מלא)
+MIGDAL_SELF_SERVICE_COMPONENT_ID = 10
+
+
 def _fetch_paz_html_http():
     """שליפת מחירון פז ב-HTTP. Selenium headless נחסם ב-Radware CAPTCHA."""
     print("שולף מחירון פז ב-HTTP...")
@@ -371,8 +383,34 @@ class ModernFuelScraper:
             if driver_was_none and self.driver:
                 self.close_driver()
 
+    def fetch_migdal_api_self_service_price(self, effective_date):
+        """
+        שליפת מחיר שירות עצמי מה-API של מגדל — רק למחיר שה-PriceDate שלו תואם בדיוק לתאריך המבוקש.
+        מחזיר None אם אין מחיר לתאריך; זורק חריגה אם ה-API לא זמין.
+        """
+        print(f"שולף מחיר שירות עצמי מ-API של מגדל לתאריך {effective_date.strftime('%d/%m/%Y')}...")
+        response = requests.get(config.MIGDAL_FUEL_API_URL, timeout=20, headers=MIGDAL_API_HEADERS)
+        response.raise_for_status()
+        target = effective_date.strftime('%Y-%m-%d')
+        for item in response.json():
+            if item.get('ComponentTypeId') == MIGDAL_SELF_SERVICE_COMPONENT_ID \
+                    and str(item.get('PriceDate', ''))[:10] == target:
+                price = float(item['PriceValue'])
+                print(f"מגדל API: {price} לתאריך {target}")
+                return price
+        print(f"אין מחיר שירות עצמי ב-API של מגדל לתאריך {target}")
+        return None
+
+    def get_migdal_self_service_price(self, effective_date):
+        """מחיר שירות עצמי ממגדל: קודם API, ואם ה-API נכשל — קריאת העמוד ב-Selenium"""
+        try:
+            return self.fetch_migdal_api_self_service_price(effective_date)
+        except Exception as e:
+            print(f"API של מגדל נכשל ({e}) — עובר לקריאת העמוד...")
+            return self.scrape_migdal_self_service_price(effective_date)
+
     def scrape_migdal_self_service_price(self, effective_date):
-        """שליפת מחיר שירות עצמי מאתר מגדל (גיבוי) — רק אם «החל מ» תואם בדיוק לתאריך המבוקש"""
+        """שליפת מחיר שירות עצמי מעמוד מגדל (גיבוי ל-API) — רק אם «החל מ» תואם בדיוק לתאריך המבוקש"""
         import re
         try:
             driver_was_none = self.driver is None
@@ -486,7 +524,7 @@ class ModernFuelScraper:
                 if not self_service_price:
                     self.self_service_source = "migdal-webpages.energy-apps.org"
                     print("\nלא נמצא ב-delekulator — שולף מחיר שירות עצמי מאתר מגדל...")
-                    self_service_price = self.scrape_migdal_self_service_price(
+                    self_service_price = self.get_migdal_self_service_price(
                         _effective_date_from_fuel_data(fuel_data)
                     )
                 if self_service_price:

@@ -92,6 +92,7 @@ DELEKULATOR_URL = "https://delekulator.co.il/היסטוריית-מחירי-הד�
 
 # אתר מגדל (מחיר שירות עצמי - גיבוי כש-delekulator לא מכיל את התאריך)
 MIGDAL_FUEL_URL = "https://migdal-webpages.energy-apps.org/fuelCalculator"
+MIGDAL_FUEL_API_URL = "https://migdal-api.energy-apps.org/api/FuelPrice/GetLatestPrice"
 
 
 # פונקציות עזר
