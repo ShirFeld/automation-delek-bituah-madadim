@@ -10,11 +10,22 @@ The interface provides three tabs, each covering a separate data collection work
 
 | Workflow | Data sources | Output |
 |---|---|---|
-| Fuel prices | Paz and Delekulator | Text files, Microsoft Access databases, and updated fuel parameter files |
+| Fuel prices | Paz, Delekulator, and the Migdal fuel price API | Text files, Microsoft Access databases, and updated fuel parameter files |
 | Mandatory car insurance | Israel's Capital Market Authority (CMA) | Insurance tables as images, Microsoft Access databases, and updated insurance parameter files |
 | Economic indices | Israel's Central Bureau of Statistics (CBS) API and US Bureau of Labor Statistics (BLS) | Monthly index files |
 
 Runs are started manually through the desktop interface. Collection tasks run in background threads to keep the interface responsive.
+
+### Fuel price sources
+
+The fuel workflow collects five values for the Paz effective date (the "valid from" date in the Paz price list):
+
+| Value | Source |
+|---|---|
+| Gasoline 98, gasoline 95, diesel, kerosene | Paz price list (HTTP, with Selenium as a fallback) |
+| Gasoline 95 self-service | 1. Delekulator price history, matched by month<br>2. If not found: the Migdal `GetLatestPrice` API, matched to the exact effective date<br>3. If the API request fails: the Migdal fuel calculator page, read with Selenium and matched to the exact effective date |
+
+If no self-service price is found for the date, no value is written: the self-service field in `par_dlk.dat` is left empty, and it is not copied from the previous row.
 
 ## Technical highlights
 
@@ -94,6 +105,8 @@ pyinstaller Auto070926V2.spec
 ```
 
 The build produces an application folder under `dist`. Keep its supporting files alongside the executable.
+
+Builds are named by date (`AutoDDMMYY`). To create a new build, copy the spec file, change both `name=` values to the new name, and point the desktop shortcut to `dist\<name>\<name>.exe`.
 
 ## Project structure
 
