@@ -90,6 +90,9 @@ PAZ_URL = "https://www.paz.co.il/price-lists"
 # אתר delekulator (מחיר שירות עצמי)
 DELEKULATOR_URL = "https://delekulator.co.il/היסטוריית-מחירי-הדלק/"
 
+# אתר מגדל (מחיר שירות עצמי - גיבוי כש-delekulator לא מכיל את התאריך)
+MIGDAL_FUEL_URL = "https://migdal-webpages.energy-apps.org/fuelCalculator"
+
 
 # פונקציות עזר
 

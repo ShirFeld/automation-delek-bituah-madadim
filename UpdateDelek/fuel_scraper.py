@@ -370,7 +370,55 @@ class ModernFuelScraper:
             # אם יצרנו דפדפן חדש, נסגור אותו
             if driver_was_none and self.driver:
                 self.close_driver()
-        
+
+    def scrape_migdal_self_service_price(self, effective_date):
+        """שליפת מחיר שירות עצמי מאתר מגדל (גיבוי) — רק אם «החל מ» תואם בדיוק לתאריך המבוקש"""
+        import re
+        try:
+            driver_was_none = self.driver is None
+            if driver_was_none:
+                if not self.setup_driver():
+                    print("שגיאה בהגדרת דפדפן לשליפת שירות עצמי ממגדל")
+                    return None
+
+            print(f"שולף מחיר שירות עצמי מאתר מגדל לתאריך {effective_date.strftime('%d/%m/%Y')}...")
+            self.driver.get(config.MIGDAL_FUEL_URL)
+
+            # "מחיר בשירות עצמי 7.35 ₪ החל מ - 1.11.26"
+            pattern = re.compile(
+                r'מחיר בשירות עצמי\s*(\d+\.\d+)\s*₪\s*החל מ\s*[-–—]\s*(\d{1,2})\.(\d{1,2})\.(\d{2,4})'
+            )
+            match = None
+            for _ in range(20):  # העמוד נטען ב-JS — ממתינים עד שהמחיר מופיע
+                text = BeautifulSoup(self.driver.page_source, 'html.parser').get_text(' ')
+                match = pattern.search(' '.join(text.split()))
+                if match:
+                    break
+                time.sleep(1)
+
+            if not match:
+                print("לא נמצא מחיר שירות עצמי באתר מגדל")
+                return None
+
+            price = float(match.group(1))
+            day, month, year = int(match.group(2)), int(match.group(3)), int(match.group(4))
+            if year < 100:
+                year += 2000
+            print(f"מגדל: {price} החל מ-{day}/{month}/{year}")
+
+            if (day, month, year) != (effective_date.day, effective_date.month, effective_date.year):
+                print("התאריך במגדל לא תואם לתאריך המבוקש — לא משתמשים במחיר")
+                return None
+
+            return price
+
+        except Exception as e:
+            print(f"שגיאה בשליפת מחיר שירות עצמי ממגדל: {str(e)}")
+            return None
+        finally:
+            if driver_was_none and self.driver:
+                self.close_driver()
+
     def start_scraping(self):
         """התחלת תהליך השליפה בחוט נפרד"""
         self.start_button.config(state='disabled', text="מעבד...")
@@ -434,6 +482,13 @@ class ModernFuelScraper:
                 
                 print("\nשולף מחיר שירות עצמי מאתר delekulator...")
                 self_service_price = self.scrape_self_service_price(month, year)
+                self.self_service_source = "delekulator.co.il"
+                if not self_service_price:
+                    self.self_service_source = "migdal-webpages.energy-apps.org"
+                    print("\nלא נמצא ב-delekulator — שולף מחיר שירות עצמי מאתר מגדל...")
+                    self_service_price = self.scrape_migdal_self_service_price(
+                        _effective_date_from_fuel_data(fuel_data)
+                    )
                 if self_service_price:
                     print(f"נמצא מחיר שירות עצמי: {self_service_price}")
                 else:
@@ -692,7 +747,7 @@ class ModernFuelScraper:
                     f.write(f"\nמוצר: בנזין 95 - שירות עצמי\n")
                     f.write(f"מחיר: {self_service_price:.2f} ₪\n")
                     f.write(f"תאריך: {date_from_data}\n")
-                    f.write(f"מקור: delekulator.co.il\n")
+                    f.write(f"מקור: {getattr(self, 'self_service_source', 'delekulator.co.il')}\n")
                     f.write("-" * 30 + "\n")
                 
                 f.write(f"\nקובץ נוצר: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n")
@@ -1074,9 +1129,11 @@ class ModernFuelScraper:
                 if neft:
                     parts[6] = f"{neft:4d}"
                 
-                # עצמאי - 3 ספרות עם רווח לפני
+                # עצמאי - 3 ספרות עם רווח לפני; אם אין ערך לתאריך — שדה ריק (לא מעתיקים מהשורה הקודמת)
                 if atzmai:
                     parts[7] = f" {atzmai:3d}"
+                else:
+                    parts[7] = " " * len(parts[7])
                 
                 # בניית השורה מחדש
                 sep = last_line[8]
