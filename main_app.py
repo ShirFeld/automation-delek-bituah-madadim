@@ -709,19 +709,18 @@ class MainApplication:
         def scrape_task():
             try:
                 scraper = MadadimScraper()
-                scraper.create_data_file()
 
                 def update_status(msg):
                     self.root.after(0, lambda: self._madadim_status_label.config(text=msg))
 
                 update_status("שולף מדדים מ-API הלמ\"ס, ואחר כך מדד BLS (Chrome)...")
                 cbs_results, bls_value = scraper.scrape_all_cbs_indicators()
+                saved, missing = scraper.save_complete_cbs_file(cbs_results, bls_value)
 
                 def show_results():
                     for widget in self.results_frame.winfo_children():
                         widget.destroy()
-                    if cbs_results or bls_value:
-                        scraper.update_data_file_with_values(cbs_results, bls_value)
+                    if saved:
                         tk.Label(
                             self.results_frame,
                             text=f"הושלמה שליפת {len(cbs_results)} מדדים מהלמ\"ס!",
@@ -740,6 +739,22 @@ class MainApplication:
                             font=self.fonts['text'],
                             bg='#f0f0f0',
                             fg=self.colors['text'],
+                            justify='right'
+                        ).pack(pady=10)
+                    elif missing:
+                        missing_lines = "\n".join(f"• {name}" for name in missing)
+                        tk.Label(
+                            self.results_frame,
+                            text=(
+                                f"הלמ\"ס עדיין לא סיימה להעלות את כל המדדים.\n"
+                                f"חסרים {len(missing)} מתוך {len(scraper.cbs_indicators)}:\n"
+                                f"{missing_lines}\n\n"
+                                "לא נוצר קובץ. אפשר לנסות שוב מאוחר יותר."
+                            ),
+                            font=self.fonts['text'],
+                            bg='#f0f0f0',
+                            fg='red',
+                            wraplength=600,
                             justify='right'
                         ).pack(pady=10)
                     else:
