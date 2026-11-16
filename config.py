@@ -63,8 +63,8 @@ DEFAULT_ENCODING = 'utf-8'
 MADADIM_DAY_THRESHOLD = 15
 MADADIM_TIME_THRESHOLD = (18, 30)  # (שעה, דקות)
 
-# Timeout לשליפת מדד BLS (ארה"ב). אחרי הזמן הזה Chrome נסגר וממשיכים בלי המדד.
-BLS_FETCH_TIMEOUT_SECONDS = 5
+# Timeout לשליפת מדד BLS (ארה"ב). האתר איטי ובודק בוטים — מחכים לנתון.
+BLS_FETCH_TIMEOUT_SECONDS = 90
 
 
 # הגדרות אתרים חיצוניים
@@ -77,6 +77,12 @@ CBS_URL = "https://www.cbs.gov.il/he/Statistics/Pages/%D7%9E%D7%97%D7%95%D7%9C%D
 
 # אתר BLS (מדד אמריקאי)
 BLS_URL = "https://data.bls.gov/dataViewer/view/timeseries/CUUR0000SA0"
+
+# גיבוי CPI אם BLS לא נטען / לא עודכן לחודש היעד
+US_INFLATION_CPI_URL = (
+    "https://www.usinflationcalculator.com/inflation/"
+    "consumer-price-index-and-annual-percent-changes-from-1913-to-2008/"
+)
 
 # אתר משרד התחבורה / רשות שוק ההון (ביטוח רכב)
 CMA_CAR_BASE_URL = "https://car.cma.gov.il"

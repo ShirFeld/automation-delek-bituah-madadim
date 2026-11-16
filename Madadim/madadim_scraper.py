@@ -1,12 +1,14 @@
 import os
+import random
 import time
 from datetime import datetime, time as dt_time
 
 import requests
+from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
 
@@ -35,6 +37,12 @@ class MadadimScraper:
 
         self.cbs_api_url = config.CBS_API_URL
         self.bls_url = config.BLS_URL
+        self.us_inflation_cpi_url = getattr(
+            config,
+            "US_INFLATION_CPI_URL",
+            "https://www.usinflationcalculator.com/inflation/"
+            "consumer-price-index-and-annual-percent-changes-from-1913-to-2008/",
+        )
         self.cbs_api_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json",
@@ -355,25 +363,76 @@ class MadadimScraper:
                     print(f"OK נתון BLS נשלף: {bls_value}")
                 else:
                     print("ERROR לא הצליח לשלוף נתון BLS")
+
+            if not bls_value:
+                print("BLS לא עודכן / נכשל — מנסה US Inflation Calculator...")
+                bls_value = self.scrape_us_inflation_cpi()
+                if bls_value:
+                    print(f"OK נתון CPI מגיבוי: {bls_value}")
+                else:
+                    print("ERROR גם אתר הגיבוי לא החזיר ערך CPI")
         finally:
             self.close_driver()
 
         return results, bls_value
 
 
+    def _act_like_human(self):
+        """גלילה ותזוזת עכבר קלה כדי לעבור בדיקת בוטים ב-BLS"""
+        if not self.driver:
+            return
+        try:
+            dx = random.randint(8, 40)
+            dy = random.randint(8, 30)
+            ActionChains(self.driver).move_by_offset(dx, dy).pause(random.uniform(0.3, 0.8)).perform()
+            ActionChains(self.driver).move_by_offset(-dx, -dy).perform()
+        except Exception:
+            pass
+        try:
+            self.driver.execute_script(f"window.scrollBy(0, {random.randint(120, 320)});")
+            time.sleep(random.uniform(0.6, 1.4))
+            self.driver.execute_script(f"window.scrollBy(0, -{random.randint(40, 120)});")
+        except Exception:
+            pass
+
+    def _parse_cpi_number(self, text):
+        """מחזיר מחרוזת ערך CPI או None אם זה לא מספר (אחוז / Avail / כוכבית)"""
+        if not text:
+            return None
+        cleaned = text.strip().replace(",", "").replace("*", "")
+        if not cleaned:
+            return None
+        lowered = cleaned.lower()
+        if any(token in lowered for token in ("avail", "n/a", "na")):
+            return None
+        try:
+            float(cleaned)
+        except ValueError:
+            return None
+        return cleaned
+
+    def _read_bls_month_value(self, prev_year, period):
+        """קורא מהטבלה ב-BLS את ערך החודש היעד, אם כבר הופיע"""
+        rows = self.driver.find_elements(By.CSS_SELECTOR, "table tr")
+        for row in rows:
+            cells = row.find_elements(By.TAG_NAME, "td")
+            if len(cells) < 4:
+                continue
+            year_cell = cells[0].text.strip()
+            period_cell = cells[1].text.strip()
+            value_cell = cells[3].text.strip()
+            if year_cell == str(prev_year) and period_cell == period:
+                parsed = self._parse_cpi_number(value_cell)
+                if parsed:
+                    return parsed
+        return None
+
     def scrape_bls_cpi(self):
-        """שליפת נתוני CPI מאתר BLS. נכשל ויוצא אחרי BLS_FETCH_TIMEOUT_SECONDS."""
-        timeout = getattr(config, "BLS_FETCH_TIMEOUT_SECONDS", 5)
+        """שליפת CPI מאתר BLS: ממתין לנתון ועושה פעולות שנראות אנושיות."""
+        timeout = getattr(config, "BLS_FETCH_TIMEOUT_SECONDS", 90)
         started = time.monotonic()
-
-        def remaining():
-            return timeout - (time.monotonic() - started)
-
-        def timed_out():
-            if remaining() <= 0:
-                print(f"ERROR פג הזמן לשליפת מדד BLS ({timeout} שניות) — מדלגים וסוגרים")
-                return True
-            return False
+        prev_year, prev_month = self.get_previous_period()
+        period = f"M{prev_month:02d}"
 
         try:
             try:
@@ -383,119 +442,83 @@ class MadadimScraper:
                 if not self.setup_driver():
                     return None
 
-            print(f"מתחיל לשלוף נתוני CPI מאתר BLS (timeout {timeout} שניות)...")
+            print(f"מתחיל לשלוף נתוני CPI מאתר BLS (ממתין עד {timeout} שניות)...")
             self.driver.set_page_load_timeout(timeout)
             self.driver.set_script_timeout(timeout)
 
             try:
                 self.driver.get(self.bls_url)
             except TimeoutException:
-                print(f"ERROR טעינת אתר BLS חרגה מ-{timeout} שניות")
-                return None
+                print("WARNING טעינת BLS ארכה — ממשיכים עם מה שנטען")
 
-            if timed_out():
-                return None
-
-            print("מחכה לטעינת הטבלה...")
-            wait = WebDriverWait(self.driver, max(0.1, remaining()))
-            try:
-                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.dataTable, table[id*='DataTables'], table")))
-            except TimeoutException:
-                print(f"ERROR הטבלה ב-BLS לא נטענה תוך {timeout} שניות")
-                return None
-
-            if timed_out():
-                return None
-
-            table = None
-            for selector in (".dataTables_scrollBody", ".dataTable"):
-                found = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                if found:
-                    table = found[0]
-                    print(f"OK נמצאה טבלה ({selector})")
-                    break
-            if table is None:
-                tables = self.driver.find_elements(By.TAG_NAME, "table")
-                if tables:
-                    table = tables[0]
-                    print(f"OK נמצאה טבלה ראשונה מתוך {len(tables)} טבלאות")
-
-            if not table:
-                print("ERROR לא נמצאה טבלה מתאימה")
-                return None
-
-            prev_year, prev_month = self.get_previous_period()
-            period = f"M{prev_month:02d}"
             print(f"מחפש נתונים לחודש: {period}, שנה: {prev_year}")
+            while time.monotonic() - started < timeout:
+                self._act_like_human()
+                value = self._read_bls_month_value(prev_year, period)
+                if value:
+                    print(f"OK נתון CPI נשלף מ-BLS: '{value}'")
+                    return value
+                time.sleep(random.uniform(1.0, 2.0))
 
-            if timed_out():
-                return None
-
-            try:
-                rows = table.find_elements(By.TAG_NAME, "tr")
-                print(f"נמצאו {len(rows)} שורות בטבלה")
-            except Exception:
-                rows = self.driver.find_elements(By.CSS_SELECTOR, "table tr")
-                print(f"נמצאו {len(rows)} שורות בדף")
-
-            if not rows:
-                print("ERROR לא נמצאו שורות בטבלה")
-                return None
-
-            target_value = None
-            print("מחפש שורה עם הנתונים הנכונים...")
-
-            for i, row in enumerate(rows):
-                if timed_out():
-                    return None
-                try:
-                    cells = row.find_elements(By.TAG_NAME, "td")
-                    if len(cells) >= 4:
-                        year_cell = cells[0].text.strip()
-                        period_cell = cells[1].text.strip()
-                        label_cell = cells[2].text.strip()
-                        value_cell = cells[3].text.strip()
-                        print(f"שורה {i}: שנה={year_cell}, period={period_cell}, label={label_cell}, value={value_cell}")
-                        if year_cell == str(prev_year) and period_cell == period:
-                            target_value = value_cell
-                            print(f"OK נמצא נתון לחודש {period}/{prev_year}: {target_value}")
-                            print(f"OK ערך BLS מקורי: '{target_value}'")
-                            break
-                except Exception as e:
-                    print(f"שגיאה בעיבוד שורה {i}: {e}")
-                    continue
-
-            if target_value:
-                print(f"OK נתון CPI נשלף בהצלחה: {target_value}")
-                return target_value
-
-            if timed_out():
-                return None
-
-            print(f"ERROR לא נמצא נתון לחודש {period}/{prev_year}")
-            print("נסיון חיפוש חלופי...")
-            try:
-                date_element = self.driver.find_element(
-                    By.XPATH,
-                    f"//td[contains(text(), '{prev_year}') and following-sibling::td[contains(text(), '{period}')]]",
-                )
-                value_element = date_element.find_element(By.XPATH, "./following-sibling::td[2]")
-                target_value = value_element.text.strip()
-                print(f"OK נמצא נתון בחיפוש חלופי: {target_value}")
-                print(f"OK ערך BLS חלופי מקורי: '{target_value}'")
-                return target_value
-            except Exception:
-                print("ERROR גם החיפוש החלופי נכשל")
-                return None
-
-        except TimeoutException:
-            print(f"ERROR פג הזמן לשליפת מדד BLS ({timeout} שניות) — מדלגים וסוגרים")
+            print(f"ERROR לא נמצא נתון לחודש {period}/{prev_year} ב-BLS תוך {timeout} שניות")
             return None
+
         except Exception as e:
             print(f"ERROR שגיאה בשליפת נתוני BLS: {e}")
             import traceback
             traceback.print_exc()
             return None
+
+    def scrape_us_inflation_cpi(self):
+        """גיבוי: ערך CPI (לא אחוז) מטבלת US Inflation Calculator לחודש היעד."""
+        prev_year, prev_month = self.get_previous_period()
+        html = None
+        try:
+            print(f"שולף CPI מגיבוי: {self.us_inflation_cpi_url}")
+            response = requests.get(
+                self.us_inflation_cpi_url,
+                timeout=30,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+                    ),
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            )
+            response.raise_for_status()
+            html = response.text
+        except Exception as e:
+            print(f"WARNING HTTP לגיבוי נכשל: {e}")
+            if self.driver:
+                try:
+                    self.driver.get(self.us_inflation_cpi_url)
+                    time.sleep(3)
+                    html = self.driver.page_source
+                except Exception as selenium_err:
+                    print(f"ERROR גם Selenium לגיבוי נכשל: {selenium_err}")
+                    return None
+            else:
+                return None
+
+        soup = BeautifulSoup(html, "html.parser")
+        year_text = str(prev_year)
+        for table in soup.find_all("table"):
+            for row in table.find_all("tr"):
+                cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["td", "th"])]
+                if len(cells) <= prev_month:
+                    continue
+                if cells[0] != year_text:
+                    continue
+                parsed = self._parse_cpi_number(cells[prev_month])
+                if parsed:
+                    print(f"OK CPI מגיבוי לחודש {prev_month:02d}/{prev_year}: '{parsed}'")
+                    return parsed
+                print(f"ERROR בגיבוי אין ערך מספרי לחודש {prev_month:02d}/{prev_year}: '{cells[prev_month]}'")
+                return None
+
+        print(f"ERROR לא נמצאה שורת {prev_year} בטבלת הגיבוי")
+        return None
     
     def update_data_file_with_values(self, cbs_values, bls_value=None):
         """עדכון קובץ הנתונים עם הערכים שנשלפו"""
