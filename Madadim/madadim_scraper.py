@@ -299,6 +299,29 @@ class MadadimScraper:
         print(f"OK ערך המדד {indicator_name} לחודש {period}: '{formatted}'")
         return formatted
 
+    def missing_cbs_indicators(self, cbs_values):
+        """שמות מדדי הלמ\"ס שאין להם ערך לשליפה הנוכחית"""
+        values = cbs_values or {}
+        return [name for name in self.cbs_indicators if not values.get(name)]
+
+    def save_complete_cbs_file(self, cbs_values, bls_value=None):
+        """
+        יוצר/מעדכן את קובץ ה-TXT רק אם כל 11 מדדי הלמ\"ס קיימים.
+        BLS אופציונלי ואינו חוסם יצירת קובץ.
+        מחזיר (נשמר, רשימת_חסרים).
+        """
+        missing = self.missing_cbs_indicators(cbs_values)
+        if missing:
+            print(
+                f"ERROR חסרים {len(missing)} מתוך {len(self.cbs_indicators)} "
+                f"מדדי למ\"ס — לא נוצר קובץ: {', '.join(missing)}"
+            )
+            return False, missing
+
+        self.create_data_file()
+        self.update_data_file_with_values(cbs_values, bls_value)
+        return True, []
+
     def scrape_all_cbs_indicators(self):
         """שליפת כל המדדים: למ\"ס דרך API, BLS דרך דפדפן"""
         results = {}
@@ -308,6 +331,14 @@ class MadadimScraper:
             value = self.scrape_cbs_indicator(indicator_name, indicator_code)
             if value:
                 results[indicator_name] = value
+
+        missing = self.missing_cbs_indicators(results)
+        if missing:
+            print(
+                f"חסרים מדדי למ\"ס ({len(missing)}/{len(self.cbs_indicators)}) "
+                f"— מדלגים על BLS ולא יוצרים קובץ"
+            )
+            return results, None
 
         try:
             print("\nמתחיל לשלוף נתוני BLS...")
@@ -509,20 +540,14 @@ class MadadimScraper:
 if __name__ == "__main__":
     scraper = MadadimScraper()
     print(f"שם הקובץ לחודש קודם: {scraper.get_previous_month_filename()}")
-    
-    # יצירת קובץ בסיסי
-    scraper.create_data_file()
-    
-    # שליפת כל המדדים
+
     print("\nמתחיל לשלוף את כל המדדים...")
     print(f"מספר מדדי CBS: {len(scraper.cbs_indicators)}")
-    
-    # שליפת כל המדדים
+
     cbs_results, bls_value = scraper.scrape_all_cbs_indicators()
-    
-    # עדכון הקובץ עם כל הערכים
-    if cbs_results or bls_value:
-        scraper.update_data_file_with_values(cbs_results, bls_value)
+    saved, missing = scraper.save_complete_cbs_file(cbs_results, bls_value)
+
+    if saved:
         print(f"\nOK סיכום התוצאות:")
         print(f"מדדי CBS שנשלפו: {len(cbs_results)}")
         for name, value in cbs_results.items():
@@ -530,6 +555,8 @@ if __name__ == "__main__":
         if bls_value:
             print(f"מדד BLS: {bls_value}")
     else:
-        print("ERROR לא הצליח לשלוף שום נתון")
-        
+        print("ERROR לא נוצר קובץ — הלמ\"ס עדיין לא סיימה להעלות את כל המדדים")
+        for name in missing:
+            print(f"  - חסר: {name}")
+
     print("שליפת כל המדדים הושלמה")
