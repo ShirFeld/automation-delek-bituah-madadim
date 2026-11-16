@@ -30,6 +30,8 @@ class MadadimScraper:
             "תשומה באוטובוסים": "440010",
             "תשומה בבניה למסחר ולמשרדים": "800010"
         }
+        self.vehicle_price_line = "מחיר רכב : 116.7000"
+        self.vehicle_price_before = "רכב פרטי ואחזקתו"
 
         self.cbs_api_url = config.CBS_API_URL
         self.bls_url = config.BLS_URL
@@ -95,6 +97,8 @@ class MadadimScraper:
             f.write("מדדים מאתר הלמ\"ס:\n")
             f.write("-" * 20 + "\n")
             for indicator_name, code in self.cbs_indicators.items():
+                if indicator_name == self.vehicle_price_before:
+                    f.write(f"{self.vehicle_price_line}\n")
                 f.write(f"{indicator_name} ({code}): \n")
             
             f.write("\nמדד מאתר BLS:\n")
